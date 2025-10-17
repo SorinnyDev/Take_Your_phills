@@ -2,10 +2,12 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/reminder.dart';
+import '../models/medication_record.dart';
 
 class DatabaseHelper {
   static Database? _database;
-  static const String tableName = 'reminders';
+  static const String reminderTable = 'reminders';
+  static const String recordTable = 'medication_records';
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -13,24 +15,21 @@ class DatabaseHelper {
     return _database!;
   }
 
-  // DB 초기화
   static Future<Database> _initDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'medication.db');
-    
-    print('📁 Database path: $path');
-    
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'reminders.db');
+
     return await openDatabase(
       path,
-      version: 1,
+      version: 1, // 🔥 개발 중에는 1로 고정!
       onCreate: _onCreate,
     );
   }
 
-  // 테이블 생성
   static Future<void> _onCreate(Database db, int version) async {
+    // reminders 테이블
     await db.execute('''
-      CREATE TABLE $tableName(
+      CREATE TABLE $reminderTable (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         amPm TEXT NOT NULL,
@@ -42,52 +41,116 @@ class DatabaseHelper {
         createdAt TEXT NOT NULL
       )
     ''');
-    print('✅ Database table created');
+
+    // medication_records 테이블
+    await db.execute('''
+      CREATE TABLE $recordTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        medicine_name TEXT NOT NULL,
+        taken_at TEXT NOT NULL,
+        note TEXT
+      )
+    ''');
+
+    print('✅ Tables created successfully');
   }
 
-  // 알림 추가
+  // ========== Reminder 관련 메서드 ==========
+  
   static Future<int> insertReminder(Reminder reminder) async {
     final db = await database;
-    final id = await db.insert(tableName, reminder.toMap());
+    final id = await db.insert(reminderTable, reminder.toMap());
     print('✅ Reminder inserted with id: $id');
     return id;
   }
 
-  // 모든 알림 가져오기
   static Future<List<Reminder>> getAllReminders() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(tableName);
-    print('📊 Found ${maps.length} reminders');
+    final List<Map<String, dynamic>> maps = await db.query(
+      reminderTable,
+      orderBy: 'createdAt DESC',
+    );
     return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
   }
 
-  // 알림 수정
   static Future<int> updateReminder(Reminder reminder) async {
     final db = await database;
     return await db.update(
-      tableName,
+      reminderTable,
       reminder.toMap(),
       where: 'id = ?',
       whereArgs: [reminder.id],
     );
   }
 
-  // 알림 삭제
   static Future<int> deleteReminder(int id) async {
     final db = await database;
     return await db.delete(
-      tableName,
+      reminderTable,
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  // 디버깅용: 모든 데이터 출력
+  // ========== MedicationRecord 관련 메서드 ==========
+  
+  static Future<int> insertRecord(MedicationRecord record) async {
+    final db = await database;
+    final id = await db.insert(recordTable, record.toMap());
+    print('✅ Medication record inserted with id: $id');
+    return id;
+  }
+
+  static Future<List<MedicationRecord>> getAllRecords() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      recordTable,
+      orderBy: 'taken_at DESC',
+    );
+    return List.generate(maps.length, (i) => MedicationRecord.fromMap(maps[i]));
+  }
+
+  static Future<List<MedicationRecord>> getRecordsByDate(DateTime date) async {
+    final db = await database;
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(Duration(days: 1));
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      recordTable,
+      where: 'taken_at >= ? AND taken_at < ?',
+      whereArgs: [startOfDay.toIso8601String(), endOfDay.toIso8601String()],
+      orderBy: 'taken_at DESC',
+    );
+    return List.generate(maps.length, (i) => MedicationRecord.fromMap(maps[i]));
+  }
+
+  static Future<int> deleteRecord(int id) async {
+    final db = await database;
+    return await db.delete(
+      recordTable,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // 디버깅용
   static Future<void> printAllData() async {
-    final reminders = await getAllReminders();
-    print('📊 Total reminders: ${reminders.length}');
+    final db = await database;
+    final reminders = await db.query(reminderTable);
+    final records = await db.query(recordTable);
+    
+    print('═══════════════════════════════════');
+    print('📊 DATABASE STATUS');
+    print('═══════════════════════════════════');
+    print('📋 Reminders: ${reminders.length} items');
     for (var reminder in reminders) {
-      print('  - ${reminder.title} at ${reminder.amPm} ${reminder.hour}:${reminder.minute}');
+      print('  - ${reminder['title']} (${reminder['amPm']} ${reminder['hour']}:${reminder['minute']})');
     }
+    print('───────────────────────────────────');
+    print('💊 Records: ${records.length} items');
+    for (var record in records) {
+      print('  - ${record['medicine_name']} at ${record['taken_at']}');
+    }
+    print('═══════════════════════════════════');
   }
 }

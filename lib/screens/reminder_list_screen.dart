@@ -9,29 +9,17 @@ import 'manual_record_screen.dart';
 
 class ReminderListScreen extends StatefulWidget {
   @override
-  _ReminderListScreenState createState() => _ReminderListScreenState();
+  State<ReminderListScreen> createState() => _ReminderListScreenState();
 }
 
 class _ReminderListScreenState extends State<ReminderListScreen> with TickerProviderStateMixin {
   List<Reminder> reminders = [];
   bool isLoading = true;
-  late AnimationController _fabController;
 
   @override
   void initState() {
     super.initState();
     _loadReminders();
-    _fabController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 300),
-    );
-    _fabController.forward();
-  }
-
-  @override
-  void dispose() {
-    _fabController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadReminders() async {
@@ -49,7 +37,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${reminder.title} 알림이 삭제되었습니다'),
-        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
     );
@@ -65,26 +53,16 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     _loadReminders();
   }
 
+  // 🔥 테스트 알림 열기 (무조건 첫 번째 알림 사용)
   void _openTestNotification() {
-    if (reminders.isEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => NotificationScreen(),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationScreen(
+          reminderId: null, // null이면 자동으로 첫 번째 알림 사용
         ),
-      );
-    } else {
-      final testReminder = reminders.first;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => NotificationScreen(
-            title: testReminder.title,
-            time: '${testReminder.amPm} ${testReminder.hour}:${testReminder.minute.toString().padLeft(2, '0')}',
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   void _goToManualRecord() {
@@ -96,12 +74,74 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     );
   }
 
+  // 🔥 액션 버튼 2개 (알림 추가 + 수동 기록)
+  Widget _buildActionButtons() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // 알림 추가 버튼 (70%)
+          Expanded(
+            flex: 7,
+            child: ElevatedButton.icon(
+              onPressed: () => _goToDetail(context),
+              icon: Icon(Icons.add, size: 22),
+              label: Text(
+                '알림 추가',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF1C2D5A),
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+          
+          SizedBox(width: 12),
+          
+          // 수동 기록 버튼 (30%)
+          Expanded(
+            flex: 3,
+            child: OutlinedButton.icon(
+              onPressed: _goToManualRecord,
+              icon: Icon(Icons.edit_note, size: 22),
+              label: Text(
+                '수동',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Color(0xFF1C2D5A),
+                side: BorderSide(color: Color(0xFF1C2D5A), width: 2),
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: CustomScrollView(
         slivers: [
+          // 앱바 (깔끔하게 제목만)
           SliverAppBar(
             expandedHeight: 120,
             floating: false,
@@ -159,6 +199,12 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
             ),
           ),
 
+          // 🔥 액션 버튼 영역 (고정)
+          SliverToBoxAdapter(
+            child: _buildActionButtons(),
+          ),
+
+          // 로딩 중
           if (isLoading)
             SliverFillRemaining(
               child: Center(
@@ -173,6 +219,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
               ),
             )
           
+          // 알림 없음
           else if (reminders.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -202,7 +249,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '+ 버튼을 눌러 첫 알림을 추가하세요',
+                      '위의 "알림 추가" 버튼을 눌러\n첫 알림을 추가하세요',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[500],
@@ -213,6 +261,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
               ),
             )
           
+          // 알림 리스트
           else
             SliverPadding(
               padding: EdgeInsets.all(16),
@@ -291,44 +340,12 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
             ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // 알림 추가 버튼
-          ScaleTransition(
-            scale: Tween<double>(begin: 0.0, end: 1.0).animate(
-              CurvedAnimation(
-                parent: _fabController,
-                curve: Curves.elasticOut,
-              ),
-            ),
-            child: FloatingActionButton(
-              onPressed: () => _goToDetail(context),
-              backgroundColor: Color(0xFF1C2D5A),
-              child: Icon(Icons.add, color: Colors.white),
-              elevation: 4,
-              heroTag: 'add_button',
-            ),
-          ),
-          SizedBox(height: 16),
-          // 테스트 알림 버튼
-          FloatingActionButton(
-            onPressed: _openTestNotification,
-            backgroundColor: Colors.orange,
-            child: Icon(Icons.notifications_active, color: Colors.white),
-            elevation: 4,
-            heroTag: 'test_button',
-          ),
-          SizedBox(height: 16),
-          // 수동 기록 버튼
-          FloatingActionButton(
-            onPressed: _goToManualRecord,
-            backgroundColor: Colors.blue,
-            child: Icon(Icons.edit_note, color: Colors.white),
-            elevation: 4,
-            heroTag: 'manual_button',
-          ),
-        ],
+      // 🔥 테스트 버튼만 플로팅으로 (개발용)
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openTestNotification,
+        backgroundColor: Colors.orange,
+        child: Icon(Icons.notifications_active, color: Colors.white),
+        elevation: 4,
       ),
     );
   }

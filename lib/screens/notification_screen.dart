@@ -1,25 +1,132 @@
 
 import 'package:flutter/material.dart';
-import 'manual_record_screen.dart';
+import '../models/reminder.dart';
+import '../helpers/database_helper.dart';
 
-class NotificationScreen extends StatelessWidget {
-  final String title;
-  final String time;
+class NotificationScreen extends StatefulWidget {
+  final int? reminderId; // 🔥 나중에 각 알림 ID를 받을 수 있도록
 
   const NotificationScreen({
     Key? key,
-    this.title = '약 먹을 시간',
-    this.time = '지금',
+    this.reminderId, // 🔥 null이면 첫 번째 알림 사용
   }) : super(key: key);
+
+  @override
+  State<NotificationScreen> createState() => _NotificationScreenState();
+}
+
+class _NotificationScreenState extends State<NotificationScreen> {
+  Reminder? _reminder;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminder();
+  }
+
+  // 🔥 알림 데이터 로드
+  Future<void> _loadReminder() async {
+    try {
+      final allReminders = await DatabaseHelper.getAllReminders();
+      
+      if (allReminders.isEmpty) {
+        // 알림이 하나도 없으면 에러 처리
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      Reminder? targetReminder;
+      
+      if (widget.reminderId != null) {
+        // 🔥 나중에: 특정 ID의 알림 찾기
+        targetReminder = allReminders.firstWhere(
+          (r) => r.id == widget.reminderId,
+          orElse: () => allReminders.first,
+        );
+      } else {
+        // 🔥 현재: 무조건 첫 번째 알림 (ID 1번)
+        targetReminder = allReminders.first;
+      }
+
+      setState(() {
+        _reminder = targetReminder;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('알림 로드 실패: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   // 2시간 후 리마인더 노티 예약 (TODO: 실제 구현 필요)
   void _scheduleReminderNotification() {
-    // 여기에 2시간 후 노티피케이션 예약 로직 추가
-    print('2시간 후 리마인더 알림 예약됨');
+    print('2시간 후 리마인더 예약: ${_reminder?.title}');
+    // TODO: 실제 알림 예약 로직
+  }
+
+  // 🔥 시간 포맷팅
+  String _getFormattedTime() {
+    if (_reminder == null) return '';
+    return '${_reminder!.amPm} ${_reminder!.hour}:${_reminder!.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
+    // 로딩 중
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Color(0xFF1C2D5A),
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    // 알림 데이터 없음
+    if (_reminder == null) {
+      return Scaffold(
+        backgroundColor: Color(0xFF1C2D5A),
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 80, color: Colors.white70),
+                SizedBox(height: 20),
+                Text(
+                  '알림 데이터를 찾을 수 없습니다',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF1C2D5A),
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text('돌아가기'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 🔥 정상 화면 (실제 데이터 사용)
     return Scaffold(
       backgroundColor: Color(0xFF1C2D5A),
       body: SafeArea(
@@ -66,7 +173,7 @@ class NotificationScreen extends StatelessWidget {
 
                     SizedBox(height: 16),
 
-                    // 약 이름
+                    // 🔥 약 이름 (DB에서 가져온 실제 데이터)
                     Container(
                       margin: EdgeInsets.symmetric(horizontal: 20),
                       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -75,7 +182,7 @@ class NotificationScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        title,
+                        _reminder!.title,
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w600,
@@ -89,9 +196,9 @@ class NotificationScreen extends StatelessWidget {
 
                     SizedBox(height: 20),
 
-                    // 시간
+                    // 🔥 시간 (DB에서 가져온 실제 데이터)
                     Text(
-                      time,
+                      _getFormattedTime(),
                       style: TextStyle(
                         fontSize: 20,
                         color: Colors.white70,
