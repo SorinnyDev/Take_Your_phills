@@ -1,3 +1,4 @@
+
 name: take_your_pills
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
@@ -30,14 +31,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   fluttertoast: ^8.2.8
-  sqflite: ^2.3.0
-  path: ^1.8.3
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  flutter_local_notifications: ^17.2.3  # 🔥 추가!
+  timezone: ^0.9.4  # 🔥 추가!
+
 
 dev_dependencies:
   flutter_test:

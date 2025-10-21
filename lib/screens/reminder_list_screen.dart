@@ -2,17 +2,18 @@
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
+import '../helpers/notification_helper.dart';
 import '../widgets/reminder_card.dart';
 import 'reminder_detail_screen.dart';
-import 'notification_screen.dart';
 import 'manual_record_screen.dart';
+import 'notification_screen.dart';
 
 class ReminderListScreen extends StatefulWidget {
   @override
-  State<ReminderListScreen> createState() => _ReminderListScreenState();
+  _ReminderListScreenState createState() => _ReminderListScreenState();
 }
 
-class _ReminderListScreenState extends State<ReminderListScreen> with TickerProviderStateMixin {
+class _ReminderListScreenState extends State<ReminderListScreen> {
   List<Reminder> reminders = [];
   bool isLoading = true;
 
@@ -31,6 +32,16 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     });
   }
 
+  void _goToDetail(BuildContext context, {Reminder? reminder}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReminderDetailScreen(reminder: reminder),
+      ),
+    );
+    _loadReminders();
+  }
+
   Future<void> _deleteReminder(Reminder reminder) async {
     await DatabaseHelper.deleteReminder(reminder.id!);
     _loadReminders();
@@ -43,26 +54,94 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     );
   }
 
-  void _goToDetail(BuildContext context, {Reminder? reminder}) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReminderDetailScreen(reminder: reminder),
+  // 🔥 1분 후 실제 알림 예약
+  Future<void> _scheduleOneMinuteNotification() async {
+    if (reminders.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('먼저 알림을 추가해주세요!'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final firstReminder = reminders.first;
+    
+    // 🔥 1분 후 알림 예약 (reminderId 전달)
+    await NotificationHelper.scheduleOneMinuteNotification(firstReminder.id!);
+    
+    // 사용자에게 피드백
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.schedule, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '1분 후 알림이 울립니다! 🔔',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
       ),
     );
-    _loadReminders();
+    
+    // 예약된 알림 목록 출력 (디버깅용)
+    final pending = await NotificationHelper.getPendingNotifications();
+    print('📋 예약된 알림 개수: ${pending.length}');
+    for (var notification in pending) {
+      print('  - ID: ${notification.id}, 제목: ${notification.title}');
+    }
   }
 
-  // 🔥 테스트 알림 열기 (무조건 첫 번째 알림 사용)
-  void _openTestNotification() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NotificationScreen(
-          reminderId: null, // null이면 자동으로 첫 번째 알림 사용
+  // 🔥 즉시 알림 테스트 - 바로 화면 이동
+  Future<void> _showImmediateTestNotification() async {
+    if (reminders.isNotEmpty) {
+      final firstReminder = reminders.first;
+      
+      // 알림 화면으로 바로 이동
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NotificationScreen(
+            reminderId: firstReminder.id!,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '먼저 알림을 추가해주세요!',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+          action: SnackBarAction(
+            label: '추가하기',
+            textColor: Colors.white,
+            onPressed: () => _goToDetail(context),
+          ),
+        ),
+      );
+    }
   }
 
   void _goToManualRecord() {
@@ -74,13 +153,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
     );
   }
 
-  // 🔥 액션 버튼 2개 (알림 추가 + 수동 기록)
   Widget _buildActionButtons() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // 알림 추가 버튼 (70%)
           Expanded(
             flex: 7,
             child: ElevatedButton.icon(
@@ -107,7 +184,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
           
           SizedBox(width: 12),
           
-          // 수동 기록 버튼 (30%)
           Expanded(
             flex: 3,
             child: OutlinedButton.icon(
@@ -141,7 +217,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
       backgroundColor: Colors.grey[50],
       body: CustomScrollView(
         slivers: [
-          // 앱바 (깔끔하게 제목만)
           SliverAppBar(
             expandedHeight: 120,
             floating: false,
@@ -199,12 +274,10 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
             ),
           ),
 
-          // 🔥 액션 버튼 영역 (고정)
           SliverToBoxAdapter(
             child: _buildActionButtons(),
           ),
 
-          // 로딩 중
           if (isLoading)
             SliverFillRemaining(
               child: Center(
@@ -219,7 +292,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
               ),
             )
           
-          // 알림 없음
           else if (reminders.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -261,7 +333,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
               ),
             )
           
-          // 알림 리스트
           else
             SliverPadding(
               padding: EdgeInsets.all(16),
@@ -340,12 +411,42 @@ class _ReminderListScreenState extends State<ReminderListScreen> with TickerProv
             ),
         ],
       ),
-      // 🔥 테스트 버튼만 플로팅으로 (개발용)
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openTestNotification,
-        backgroundColor: Colors.orange,
-        child: Icon(Icons.notifications_active, color: Colors.white),
-        elevation: 4,
+      // 🔥 플로팅 버튼을 2개로 변경
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // 즉시 알림 버튼
+          FloatingActionButton.extended(
+            onPressed: _showImmediateTestNotification,
+            backgroundColor: Colors.blue,
+            heroTag: 'immediate',
+            icon: Icon(Icons.notifications_active, color: Colors.white),
+            label: Text(
+              '즉시',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          
+          SizedBox(height: 12),
+          
+          // 1분 후 알림 버튼
+          FloatingActionButton.extended(
+            onPressed: _scheduleOneMinuteNotification,
+            backgroundColor: Colors.orange,
+            heroTag: '1min',
+            icon: Icon(Icons.alarm_add, color: Colors.white),
+            label: Text(
+              '1분 후',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
