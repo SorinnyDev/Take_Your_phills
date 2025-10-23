@@ -1,4 +1,4 @@
-package com.SorinnyDev.take_your_pills
+package com.sorinnydev.take_your_pills
 
 import io.flutter.embedding.android.FlutterActivity
 

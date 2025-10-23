@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🔥 추가
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../screens/notification_screen.dart';
@@ -9,6 +10,9 @@ class NotificationHelper {
       FlutterLocalNotificationsPlugin();
   
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  
+  // 🔥 네이티브 채널 추가
+  static const platform = MethodChannel('com.sorinnydev.take_your_pills/notification');
 
   static Future<void> initialize() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -30,7 +34,10 @@ class NotificationHelper {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // 🔥 iOS: 앱 시작 시 마지막 알림 확인
+    // 🔥 네이티브 이벤트 리스너 등록
+    platform.setMethodCallHandler(_handleNativeMethod);
+
+    // iOS: 앱 시작 시 마지막 알림 확인
     final notificationAppLaunchDetails = 
         await _notifications.getNotificationAppLaunchDetails();
     
@@ -41,7 +48,6 @@ class NotificationHelper {
       if (payload != null) {
         final reminderId = int.tryParse(payload);
         if (reminderId != null) {
-          // 🔥 약간의 딜레이 후 화면 이동
           Future.delayed(Duration(milliseconds: 1000), () {
             if (navigatorKey.currentState != null) {
               navigatorKey.currentState?.push(
@@ -61,25 +67,87 @@ class NotificationHelper {
     print('✅ NotificationHelper 초기화 완료');
   }
 
+  // 🔥 네이티브에서 호출되는 메서드 처리
+  static Future<void> _handleNativeMethod(MethodCall call) async {
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📱 네이티브 메서드 호출: ${call.method}');
+    print('   Arguments: ${call.arguments}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    switch (call.method) {
+      case 'onForegroundNotification':
+        // 🔥 포그라운드 알림 - 바로 화면 이동!
+        final reminderId = int.tryParse(call.arguments.toString());
+        if (reminderId != null && navigatorKey.currentState != null) {
+          print('✅ 포그라운드에서 바로 화면 이동!');
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => NotificationScreen(
+                reminderId: reminderId,
+              ),
+            ),
+          );
+        }
+        break;
+        
+      case 'onNotificationTap':
+        // 🔥 백그라운드 알림 탭
+        final reminderId = int.tryParse(call.arguments.toString());
+        if (reminderId != null && navigatorKey.currentState != null) {
+          print('✅ 백그라운드 알림 탭 - 화면 이동!');
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => NotificationScreen(
+                reminderId: reminderId,
+              ),
+            ),
+          );
+        }
+        break;
+    }
+  }
+
+  // 🔥 iOS 포그라운드 알림 수신 시 자동 화면 이동
   static Future<void> onDidReceiveLocalNotification(
     int id,
     String? title,
     String? body,
     String? payload,
   ) async {
-    print('🍎 iOS 포그라운드 알림 수신: $title');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('🍎 iOS 포그라운드 알림 수신!');
+    print('   ID: $id');
+    print('   Title: $title');
+    print('   Body: $body');
+    print('   Payload: $payload');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     if (payload != null) {
       final reminderId = int.tryParse(payload);
-      if (reminderId != null && navigatorKey.currentContext != null) {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => NotificationScreen(
-              reminderId: reminderId,
+      
+      if (reminderId != null) {
+        print('✅ ReminderId 파싱 성공: $reminderId');
+        print('🔍 Navigator State: ${navigatorKey.currentState}');
+        
+        if (navigatorKey.currentState != null) {
+          print('✅ 포그라운드에서 자동으로 화면 이동!');
+          
+          // 🔥 포그라운드에서 바로 화면 이동
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => NotificationScreen(
+                reminderId: reminderId,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          print('❌ Navigator State가 null');
+        }
+      } else {
+        print('❌ ReminderId 파싱 실패: $payload');
       }
+    } else {
+      print('❌ Payload가 null');
     }
   }
 
@@ -99,10 +167,11 @@ class NotificationHelper {
         );
   }
 
+  // 🔥 백그라운드/종료 상태에서 알림 탭 처리
   @pragma('vm:entry-point')
   static void _onNotificationTapped(NotificationResponse response) {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🔔 알림 클릭됨!');
+    print('🔔 알림 클릭됨! (백그라운드/종료 상태)');
     print('   Notification ID: ${response.id}');
     print('   Payload: ${response.payload}');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -149,17 +218,18 @@ class NotificationHelper {
     );
   }
 
-  static Future<void> scheduleOneMinuteNotification(int reminderId) async {
+  // 🔥 10초 후 알림
+  static Future<void> scheduleTenSecondsNotification(int reminderId) async {
     final now = DateTime.now();
-    final scheduledTime = now.add(Duration(minutes: 1));
+    final scheduledTime = now.add(Duration(seconds: 10));
     
-    print('🔔 1분 후 알림 예약');
+    print('🔔 10초 후 알림 예약');
     print('   Reminder ID: $reminderId');
 
     const androidDetails = AndroidNotificationDetails(
       'test_channel',
       '테스트 알림',
-      channelDescription: '1분 후 테스트 알림',
+      channelDescription: '10초 후 테스트 알림',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
@@ -167,6 +237,7 @@ class NotificationHelper {
       playSound: true,
     );
 
+    // 🔥 userInfo 제거 - payload로만 전달
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
@@ -188,10 +259,57 @@ class NotificationHelper {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      payload: reminderId.toString(),
+      payload: reminderId.toString(), // 🔥 이것만으로 충분!
     );
 
-    print('✅ 알림 예약 완료!');
+    print('✅ 알림 예약 완료! (10초 후)');
+  }
+
+  // 🔥 1분 후 알림 예약
+  static Future<void> scheduleOneMinuteNotification(int reminderId) async {
+    final now = DateTime.now();
+    final scheduledTime = now.add(Duration(minutes: 1));
+    
+    print('🔔 1분 후 알림 예약');
+    print('   Reminder ID: $reminderId');
+
+    const androidDetails = AndroidNotificationDetails(
+      'test_channel',
+      '테스트 알림',
+      channelDescription: '1분 후 테스트 알림',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+    );
+
+    // 🔥 userInfo 제거
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      999,
+      '💊 약 먹을 시간!',
+      '1분이 지났습니다. 지금 바로 확인하세요',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: reminderId.toString(), // 🔥 payload로 전달
+    );
+
+    print('✅ 알림 예약 완료! (1분 후)');
   }
 
   static Future<void> cancelNotification(int id) async {

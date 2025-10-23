@@ -54,8 +54,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     );
   }
 
-  // 🔥 1분 후 실제 알림 예약
-  Future<void> _scheduleOneMinuteNotification() async {
+  // 🔥 10초 후 알림 예약 (하나만 남기기)
+  Future<void> _scheduleTenSecondNotification() async {
     if (reminders.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -70,8 +70,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
     final firstReminder = reminders.first;
     
-    // 🔥 1분 후 알림 예약 (reminderId 전달)
-    await NotificationHelper.scheduleOneMinuteNotification(firstReminder.id!);
+    // 🔥 10초 후 알림 예약
+    await NotificationHelper.scheduleTenSecondsNotification(firstReminder.id!);
     
     // 사용자에게 피드백
     ScaffoldMessenger.of(context).showSnackBar(
@@ -82,7 +82,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                '1분 후 알림이 울립니다! 🔔',
+                '10초 후 알림이 울립니다! 🔔',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -94,7 +94,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
       ),
     );
     
-    // 예약된 알림 목록 출력 (디버깅용)
+    // 예약된 알림 목록 출력
     final pending = await NotificationHelper.getPendingNotifications();
     print('📋 예약된 알림 개수: ${pending.length}');
     for (var notification in pending) {
@@ -432,14 +432,14 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           
           SizedBox(height: 12),
           
-          // 1분 후 알림 버튼
+          // 🔥 10초 후 알림 버튼
           FloatingActionButton.extended(
-            onPressed: _scheduleOneMinuteNotification,
+            onPressed: _scheduleTenSecondNotification,
             backgroundColor: Colors.orange,
-            heroTag: '1min',
+            heroTag: '10sec',
             icon: Icon(Icons.alarm_add, color: Colors.white),
             label: Text(
-              '1분 후',
+              '10초 후',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
