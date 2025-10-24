@@ -1,6 +1,7 @@
 
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 🔥 추가
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../screens/notification_screen.dart';
@@ -8,66 +9,49 @@ import '../screens/notification_screen.dart';
 class NotificationHelper {
   static final FlutterLocalNotificationsPlugin _notifications = 
       FlutterLocalNotificationsPlugin();
-  
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   
-  // 🔥 네이티브 채널 추가
   static const platform = MethodChannel('com.sorinnydev.take_your_pills/notification');
 
+  // 🔥 앱이 포그라운드인지 추적
+  static bool _isAppInForeground = true;
+
   static Future<void> initialize() async {
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('🔔 NotificationHelper 초기화 시작');
+
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     
-    final iosSettings = DarwinInitializationSettings(
+    const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
       onDidReceiveLocalNotification: onDidReceiveLocalNotification,
     );
 
-    final settings = InitializationSettings(
+    const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
+    await _notifications.initialize(initSettings);
 
-    // 🔥 네이티브 이벤트 리스너 등록
+    print('✅ 알림 플러그인 초기화 완료');
+
     platform.setMethodCallHandler(_handleNativeMethod);
 
-    // iOS: 앱 시작 시 마지막 알림 확인
-    final notificationAppLaunchDetails = 
-        await _notifications.getNotificationAppLaunchDetails();
-    
-    if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
-      final payload = notificationAppLaunchDetails!.notificationResponse?.payload;
-      print('🍎 앱이 알림으로 시작됨! Payload: $payload');
-      
-      if (payload != null) {
-        final reminderId = int.tryParse(payload);
-        if (reminderId != null) {
-          Future.delayed(Duration(milliseconds: 1000), () {
-            if (navigatorKey.currentState != null) {
-              navigatorKey.currentState?.push(
-                MaterialPageRoute(
-                  builder: (context) => NotificationScreen(
-                    reminderId: reminderId,
-                  ),
-                ),
-              );
-            }
-          });
-        }
-      }
-    }
-
     await _requestPermissions();
+    
     print('✅ NotificationHelper 초기화 완료');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  // 🔥 네이티브에서 호출되는 메서드 처리
+  // 🔥 앱 상태 업데이트
+  static void updateAppState(bool isInForeground) {
+    _isAppInForeground = isInForeground;
+    print('📱 앱 상태 업데이트: ${isInForeground ? "포그라운드" : "백그라운드"}');
+  }
+
   static Future<void> _handleNativeMethod(MethodCall call) async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
@@ -76,10 +60,9 @@ class NotificationHelper {
     
     switch (call.method) {
       case 'onForegroundNotification':
-        // 🔥 포그라운드 알림 - 바로 화면 이동!
         final reminderId = int.tryParse(call.arguments.toString());
         if (reminderId != null && navigatorKey.currentState != null) {
-          print('✅ 포그라운드에서 바로 화면 이동!');
+          print('✅ 포그라운드 - 바로 화면 이동!');
           navigatorKey.currentState?.push(
             MaterialPageRoute(
               builder: (context) => NotificationScreen(
@@ -91,7 +74,6 @@ class NotificationHelper {
         break;
         
       case 'onNotificationTap':
-        // 🔥 백그라운드 알림 탭
         final reminderId = int.tryParse(call.arguments.toString());
         if (reminderId != null && navigatorKey.currentState != null) {
           print('✅ 백그라운드 알림 탭 - 화면 이동!');
@@ -107,7 +89,6 @@ class NotificationHelper {
     }
   }
 
-  // 🔥 iOS 포그라운드 알림 수신 시 자동 화면 이동
   static Future<void> onDidReceiveLocalNotification(
     int id,
     String? title,
@@ -117,85 +98,59 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🍎 iOS 포그라운드 알림 수신!');
     print('   ID: $id');
-    print('   Title: $title');
-    print('   Body: $body');
     print('   Payload: $payload');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
-    if (payload != null) {
-      final reminderId = int.tryParse(payload);
-      
-      if (reminderId != null) {
-        print('✅ ReminderId 파싱 성공: $reminderId');
-        print('🔍 Navigator State: ${navigatorKey.currentState}');
-        
-        if (navigatorKey.currentState != null) {
-          print('✅ 포그라운드에서 자동으로 화면 이동!');
-          
-          // 🔥 포그라운드에서 바로 화면 이동
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => NotificationScreen(
-                reminderId: reminderId,
-              ),
-            ),
-          );
-        } else {
-          print('❌ Navigator State가 null');
-        }
-      } else {
-        print('❌ ReminderId 파싱 실패: $payload');
-      }
-    } else {
-      print('❌ Payload가 null');
-    }
   }
 
   static Future<void> _requestPermissions() async {
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    print('🔐 권한 요청 시작');
 
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    
+    if (androidPlugin != null) {
+      final granted = await androidPlugin.requestNotificationsPermission();
+      print('   Android 알림 권한: ${granted == true ? "✅ 허용됨" : "❌ 거부됨"}');
+      
+      final exactAlarmGranted = await androidPlugin.requestExactAlarmsPermission();
+      print('   Android 정확한 알람 권한: ${exactAlarmGranted == true ? "✅ 허용됨" : "❌ 거부됨"}');
+    }
+
+    final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    
+    if (iosPlugin != null) {
+      await iosPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      print('   iOS 알림 권한 요청 완료');
+    }
+
+    print('✅ 권한 요청 완료');
   }
 
-  // 🔥 백그라운드/종료 상태에서 알림 탭 처리
-  @pragma('vm:entry-point')
-  static void _onNotificationTapped(NotificationResponse response) {
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🔔 알림 클릭됨! (백그라운드/종료 상태)');
-    print('   Notification ID: ${response.id}');
-    print('   Payload: ${response.payload}');
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
-    if (response.payload == null) {
-      print('❌ Payload가 null입니다!');
-      return;
-    }
+  // 🔥 10초 후 알림 (테스트용)
+  static Future<void> scheduleTenSecondsNotification(int reminderId) async {
+    final now = tz.TZDateTime.now(tz.local);
+    final scheduledDate = now.add(Duration(seconds: 10));
 
-    final reminderId = int.tryParse(response.payload!);
-    
-    if (reminderId == null) {
-      print('❌ ReminderId 파싱 실패: ${response.payload}');
-      return;
-    }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('🔔 10초 후 알림 예약 시작');
+    print('   현재 시간: $now');
+    print('   예약 시간: $scheduledDate');
+    print('   Reminder ID: $reminderId');
+    print('   플랫폼: ${Platform.isIOS ? "iOS" : "Android"}');
+    print('   현재 앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
 
-    print('✅ ReminderId 파싱 성공: $reminderId');
-    print('🔍 Navigator State: ${navigatorKey.currentState}');
-    
-    if (navigatorKey.currentState == null) {
-      print('❌ Navigator State가 null - 500ms 후 재시도');
-      Future.delayed(Duration(milliseconds: 500), () {
+    // 🔥 Android: 포그라운드면 바로 화면 이동
+    if (Platform.isAndroid && _isAppInForeground) {
+      print('✅ Android 포그라운드 - 10초 후 바로 화면 이동');
+      
+      Future.delayed(Duration(seconds: 10), () {
         if (navigatorKey.currentState != null) {
-          print('✅ Navigator 복구됨 - 화면 이동');
+          print('✅ 10초 경과 - 화면 이동!');
           navigatorKey.currentState?.push(
             MaterialPageRoute(
               builder: (context) => NotificationScreen(
@@ -205,44 +160,33 @@ class NotificationHelper {
           );
         }
       });
+      
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return;
     }
 
-    print('✅ 화면 이동 시작');
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (context) => NotificationScreen(
-          reminderId: reminderId,
-        ),
-      ),
-    );
-  }
-
-  // 🔥 10초 후 알림
-  static Future<void> scheduleTenSecondsNotification(int reminderId) async {
-    final now = DateTime.now();
-    final scheduledTime = now.add(Duration(seconds: 10));
-    
-    print('🔔 10초 후 알림 예약');
-    print('   Reminder ID: $reminderId');
+    // 🔥 iOS는 항상 알림 예약 (AppDelegate에서 처리)
+    // 🔥 Android 백그라운드도 알림 예약
+    print('✅ 알림 예약 (iOS 또는 Android 백그라운드)');
 
     const androidDetails = AndroidNotificationDetails(
       'test_channel',
-      '테스트 알림',
-      channelDescription: '10초 후 테스트 알림',
+      'Test Notifications',
+      channelDescription: 'Test notification channel',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
       enableVibration: true,
       playSound: true,
+      visibility: NotificationVisibility.public,
+      ticker: '약 먹을 시간입니다!',
     );
 
-    // 🔥 userInfo 제거 - payload로만 전달
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
+      sound: 'default',
     );
 
     const details = NotificationDetails(
@@ -253,63 +197,23 @@ class NotificationHelper {
     await _notifications.zonedSchedule(
       998,
       '💊 약 먹을 시간!',
-      '지금 바로 확인하세요',
-      tz.TZDateTime.from(scheduledTime, tz.local),
+      '지금 복용하세요',
+      scheduledDate,
       details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      payload: reminderId.toString(), // 🔥 이것만으로 충분!
+      payload: reminderId.toString(),
     );
 
-    print('✅ 알림 예약 완료! (10초 후)');
-  }
+    print('✅ 알림 예약 성공!');
 
-  // 🔥 1분 후 알림 예약
-  static Future<void> scheduleOneMinuteNotification(int reminderId) async {
-    final now = DateTime.now();
-    final scheduledTime = now.add(Duration(minutes: 1));
-    
-    print('🔔 1분 후 알림 예약');
-    print('   Reminder ID: $reminderId');
-
-    const androidDetails = AndroidNotificationDetails(
-      'test_channel',
-      '테스트 알림',
-      channelDescription: '1분 후 테스트 알림',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-    );
-
-    // 🔥 userInfo 제거
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.zonedSchedule(
-      999,
-      '💊 약 먹을 시간!',
-      '1분이 지났습니다. 지금 바로 확인하세요',
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: reminderId.toString(), // 🔥 payload로 전달
-    );
-
-    print('✅ 알림 예약 완료! (1분 후)');
+    final pending = await getPendingNotifications();
+    print('📋 현재 예약된 알림 개수: ${pending.length}');
+    for (var notification in pending) {
+      print('   - ID: ${notification.id}, 제목: ${notification.title}');
+    }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<void> cancelNotification(int id) async {

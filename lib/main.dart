@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Pretendard',
       ),
       navigatorKey: NotificationHelper.navigatorKey,
-      home: AppLifecycleObserver(child: MainScreen()), // 🔥 라이프사이클 관찰
+      home: AppLifecycleObserver(child: MainScreen()),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -63,17 +63,24 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
     switch (state) {
       case AppLifecycleState.resumed:
         print('   ✅ 앱이 포그라운드로 전환됨');
+        NotificationHelper.updateAppState(true); // 🔥 추가
         print('   🔍 Navigator 상태: ${NotificationHelper.navigatorKey.currentState}');
         break;
+        
       case AppLifecycleState.inactive:
         print('   ⏸️  앱이 비활성 상태');
         break;
+        
       case AppLifecycleState.paused:
         print('   ⏸️  앱이 백그라운드로 전환됨');
+        NotificationHelper.updateAppState(false); // 🔥 추가
         break;
+        
       case AppLifecycleState.detached:
         print('   🛑 앱이 종료됨');
+        NotificationHelper.updateAppState(false); // 🔥 추가
         break;
+        
       case AppLifecycleState.hidden:
         print('   👻 앱이 숨겨짐');
         break;
