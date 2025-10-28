@@ -1,4 +1,5 @@
 
+import 'dart:ui'; // 🔥 블러 효과
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
@@ -7,6 +8,7 @@ import '../widgets/reminder_card.dart';
 import 'reminder_detail_screen.dart';
 import 'manual_record_screen.dart';
 import 'notification_screen.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class ReminderListScreen extends StatefulWidget {
   @override
@@ -16,6 +18,8 @@ class ReminderListScreen extends StatefulWidget {
 class _ReminderListScreenState extends State<ReminderListScreen> {
   List<Reminder> reminders = [];
   bool isLoading = true;
+  int? _longPressedReminderId; // 🔥 롱프레스된 카드 ID 추적
+  final Map<int, GlobalKey<ReminderCardState>> _cardKeys = {}; // 🔥 카드 키 관리
 
   @override
   void initState() {
@@ -29,37 +33,64 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     setState(() {
       reminders = data;
       isLoading = false;
+      _cardKeys.clear();
+      for (var reminder in reminders) {
+        _cardKeys[reminder.id!] = GlobalKey<ReminderCardState>();
+      }
     });
   }
 
   void _goToDetail(BuildContext context, {Reminder? reminder}) async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ReminderDetailScreen(reminder: reminder),
       ),
     );
-    _loadReminders();
+    if (result == true) {
+      _loadReminders();
+    }
   }
 
   Future<void> _deleteReminder(Reminder reminder) async {
     await DatabaseHelper.deleteReminder(reminder.id!);
     _loadReminders();
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${reminder.title} 알림이 삭제되었습니다'),
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 12),
+            Text(
+              '${reminder.title} 알림이 삭제되었습니다',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
     );
   }
 
-  // 🔥 10초 후 알림 예약 (하나만 남기기)
   Future<void> _scheduleTenSecondNotification() async {
     if (reminders.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('먼저 알림을 추가해주세요!'),
+          content: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '먼저 알림을 추가해주세요!',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
           duration: Duration(seconds: 2),
@@ -69,11 +100,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     }
 
     final firstReminder = reminders.first;
-    
-    // 🔥 10초 후 알림 예약
     await NotificationHelper.scheduleTenSecondsNotification(firstReminder.id!);
     
-    // 사용자에게 피드백
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -93,21 +121,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         duration: Duration(seconds: 3),
       ),
     );
-    
-    // 예약된 알림 목록 출력
-    final pending = await NotificationHelper.getPendingNotifications();
-    print('📋 예약된 알림 개수: ${pending.length}');
-    for (var notification in pending) {
-      print('  - ID: ${notification.id}, 제목: ${notification.title}');
-    }
   }
 
-  // 🔥 즉시 알림 테스트 - 바로 화면 이동
   Future<void> _showImmediateTestNotification() async {
     if (reminders.isNotEmpty) {
       final firstReminder = reminders.first;
-      
-      // 알림 화면으로 바로 이동
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -153,6 +171,117 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     );
   }
 
+  // 🔥 롱프레스 시 해당 카드 ID 저장
+  void _showReminderPopupMenu(BuildContext context, Reminder reminder, RenderBox cardBox) {
+    setState(() => _longPressedReminderId = reminder.id); // 🔥 롱프레스된 카드 ID 저장
+    
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final cardPosition = cardBox.localToGlobal(Offset.zero);
+    final cardSize = cardBox.size;
+    
+    final menuPosition = Offset(
+      cardPosition.dx + cardSize.width + 8,
+      cardPosition.dy + cardSize.height / 2,
+    );
+    
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        menuPosition & Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: Colors.white,
+      elevation: 8,
+      constraints: BoxConstraints(
+        minWidth: 120,
+        maxWidth: 120,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'delete',
+          height: 48,
+          child: Row(
+            children: [
+              Icon(Icons.delete, color: Colors.red, size: 20),
+              SizedBox(width: 12),
+              Text(
+                '삭제하기',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      // 🔥 메뉴 닫힐 때 롱프레스 상태 해제
+      setState(() => _longPressedReminderId = null);
+      _cardKeys[reminder.id]?.currentState?.resetLongPress();
+      
+      if (value == 'delete') {
+        _confirmDelete(context, reminder);
+      }
+    });
+  }
+
+  Future<void> _confirmDelete(BuildContext context, Reminder reminder) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+            SizedBox(width: 12),
+            Text('알림 삭제'),
+          ],
+        ),
+        content: Text(
+          '${reminder.title} 알림을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
+          style: TextStyle(height: 1.5),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              '취소',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              '삭제',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _deleteReminder(reminder);
+    }
+  }
+
   Widget _buildActionButtons() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -192,14 +321,14 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               label: Text(
                 '수동',
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Color(0xFF1C2D5A),
-                side: BorderSide(color: Color(0xFF1C2D5A), width: 2),
                 padding: EdgeInsets.symmetric(vertical: 16),
+                side: BorderSide(color: Color(0xFF1C2D5A), width: 2),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -346,6 +475,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final reminder = reminders[index];
+                    final isLongPressed = _longPressedReminderId == reminder.id;
+                    
                     return Dismissible(
                       key: Key(reminder.id.toString()),
                       direction: DismissDirection.endToStart,
@@ -383,24 +514,31 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                       onDismissed: (direction) => _deleteReminder(reminder),
                       child: Hero(
                         tag: 'reminder_${reminder.id}',
-                        child: ReminderCard(
-                          reminder: reminder,
-                          onTap: () => _goToDetail(context, reminder: reminder),
-                          onToggle: (value) async {
-                            final updated = Reminder(
-                              id: reminder.id,
-                              title: reminder.title,
-                              amPm: reminder.amPm,
-                              hour: reminder.hour,
-                              minute: reminder.minute,
-                              repeatHour: reminder.repeatHour,
-                              repeatMinute: reminder.repeatMinute,
-                              isEnabled: value,
-                              createdAt: reminder.createdAt,
-                            );
-                            await DatabaseHelper.updateReminder(updated);
-                            _loadReminders();
-                          },
+                        child: Opacity(
+                          opacity: isLongPressed ? 1.0 : (_longPressedReminderId != null ? 0.3 : 1.0),
+                          child: ReminderCard(
+                            key: _cardKeys[reminder.id],
+                            reminder: reminder,
+                            onTap: () => _goToDetail(context, reminder: reminder),
+                            onLongPress: (cardBox) {
+                              _showReminderPopupMenu(context, reminder, cardBox);
+                            },
+                            onToggle: (value) async {
+                              final updated = Reminder(
+                                id: reminder.id,
+                                title: reminder.title,
+                                amPm: reminder.amPm,
+                                hour: reminder.hour,
+                                minute: reminder.minute,
+                                repeatHour: reminder.repeatHour,
+                                repeatMinute: reminder.repeatMinute,
+                                isEnabled: value,
+                                createdAt: reminder.createdAt,
+                              );
+                              await DatabaseHelper.updateReminder(updated);
+                              _loadReminders();
+                            },
+                          ),
                         ),
                       ),
                     );
@@ -411,11 +549,9 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
             ),
         ],
       ),
-      // 🔥 플로팅 버튼을 2개로 변경
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // 즉시 알림 버튼
           FloatingActionButton.extended(
             onPressed: _showImmediateTestNotification,
             backgroundColor: Colors.blue,
@@ -432,7 +568,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           
           SizedBox(height: 12),
           
-          // 🔥 10초 후 알림 버튼
           FloatingActionButton.extended(
             onPressed: _scheduleTenSecondNotification,
             backgroundColor: Colors.orange,
