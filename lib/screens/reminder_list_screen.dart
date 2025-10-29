@@ -47,9 +47,9 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         builder: (context) => ReminderDetailScreen(reminder: reminder),
       ),
     );
-    if (result == true) {
-      _loadReminders();
-    }
+    
+    // 🔥 result 값에 관계없이 무조건 새로고침
+    _loadReminders();
   }
 
   Future<void> _deleteReminder(Reminder reminder) async {
@@ -477,68 +477,33 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                     final reminder = reminders[index];
                     final isLongPressed = _longPressedReminderId == reminder.id;
                     
-                    return Dismissible(
-                      key: Key(reminder.id.toString()),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: EdgeInsets.only(right: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.delete, color: Colors.white),
-                      ),
-                      confirmDismiss: (direction) async {
-                        return await showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('알림 삭제'),
-                            content: Text('${reminder.title} 알림을 삭제하시겠습니까?'),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text('취소'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: Text('삭제', style: TextStyle(color: Colors.red)),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      onDismissed: (direction) => _deleteReminder(reminder),
-                      child: Hero(
-                        tag: 'reminder_${reminder.id}',
-                        child: Opacity(
-                          opacity: isLongPressed ? 1.0 : (_longPressedReminderId != null ? 0.3 : 1.0),
-                          child: ReminderCard(
-                            key: _cardKeys[reminder.id],
-                            reminder: reminder,
-                            onTap: () => _goToDetail(context, reminder: reminder),
-                            onLongPress: (cardBox) {
-                              _showReminderPopupMenu(context, reminder, cardBox);
-                            },
-                            onToggle: (value) async {
-                              final updated = Reminder(
-                                id: reminder.id,
-                                title: reminder.title,
-                                amPm: reminder.amPm,
-                                hour: reminder.hour,
-                                minute: reminder.minute,
-                                repeatHour: reminder.repeatHour,
-                                repeatMinute: reminder.repeatMinute,
-                                isEnabled: value,
-                                createdAt: reminder.createdAt,
-                              );
-                              await DatabaseHelper.updateReminder(updated);
-                              _loadReminders();
-                            },
-                          ),
+                    // 🔥 Dismissible 제거, Hero + Opacity만 남김
+                    return Hero(
+                      tag: 'reminder_${reminder.id}',
+                      child: Opacity(
+                        opacity: isLongPressed ? 1.0 : (_longPressedReminderId != null ? 0.3 : 1.0),
+                        child: ReminderCard(
+                          key: _cardKeys[reminder.id],
+                          reminder: reminder,
+                          onTap: () => _goToDetail(context, reminder: reminder),
+                          onLongPress: (cardBox) {
+                            _showReminderPopupMenu(context, reminder, cardBox);
+                          },
+                          onToggle: (value) async {
+                            final updated = Reminder(
+                              id: reminder.id,
+                              title: reminder.title,
+                              amPm: reminder.amPm,
+                              hour: reminder.hour,
+                              minute: reminder.minute,
+                              repeatHour: reminder.repeatHour,
+                              repeatMinute: reminder.repeatMinute,
+                              isEnabled: value,
+                              createdAt: reminder.createdAt,
+                            );
+                            await DatabaseHelper.updateReminder(updated);
+                            _loadReminders();
+                          },
                         ),
                       ),
                     );
