@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../screens/notification_screen.dart';
+import '../models/reminder.dart';
+import 'database_helper.dart';
 
 class NotificationHelper {
   static final FlutterLocalNotificationsPlugin _notifications = 
@@ -49,44 +51,37 @@ class NotificationHelper {
   // 🔥 앱 상태 업데이트
   static void updateAppState(bool isInForeground) {
     _isAppInForeground = isInForeground;
-    print('📱 앱 상태 업데이트: ${isInForeground ? "포그라운드" : "백그라운드"}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📱 앱 상태 변경: ${isInForeground ? "포그라운드" : "백그라운드"}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<void> _handleNativeMethod(MethodCall call) async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
-    switch (call.method) {
-      case 'onForegroundNotification':
-        final reminderId = int.tryParse(call.arguments.toString());
-        if (reminderId != null && navigatorKey.currentState != null) {
-          print('✅ 포그라운드 - 바로 화면 이동!');
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => NotificationScreen(
-                reminderId: reminderId,
-              ),
-            ),
-          );
-        }
-        break;
+
+    if (call.method == 'onForegroundNotification') {
+      if (_isAppInForeground) {
+        final payload = call.arguments as String?;
+        print('   ✅ 포그라운드 알림 수신 - Payload: $payload');
         
-      case 'onNotificationTap':
-        final reminderId = int.tryParse(call.arguments.toString());
-        if (reminderId != null && navigatorKey.currentState != null) {
-          print('✅ 백그라운드 알림 탭 - 화면 이동!');
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => NotificationScreen(
-                reminderId: reminderId,
+        if (payload != null) {
+          final reminderId = int.tryParse(payload);
+          if (reminderId != null) {
+            print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
+            
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (context) => NotificationScreen(reminderId: reminderId),
               ),
-            ),
-          );
+            );
+          }
         }
-        break;
+      }
     }
+    
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<void> onDidReceiveLocalNotification(
@@ -96,124 +91,208 @@ class NotificationHelper {
     String? payload,
   ) async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🍎 iOS 포그라운드 알림 수신!');
+    print('🍎 iOS 로컬 알림 수신');
     print('   ID: $id');
+    print('   Title: $title');
+    print('   Body: $body');
     print('   Payload: $payload');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<void> _requestPermissions() async {
-    print('🔐 권한 요청 시작');
-
-    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    
-    if (androidPlugin != null) {
-      final granted = await androidPlugin.requestNotificationsPermission();
-      print('   Android 알림 권한: ${granted == true ? "✅ 허용됨" : "❌ 거부됨"}');
-      
-      final exactAlarmGranted = await androidPlugin.requestExactAlarmsPermission();
-      print('   Android 정확한 알람 권한: ${exactAlarmGranted == true ? "✅ 허용됨" : "❌ 거부됨"}');
+    if (Platform.isIOS) {
+      final granted = await _notifications
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+      print('✅ iOS 알림 권한: ${granted == true ? "허용됨" : "거부됨"}');
+    } else if (Platform.isAndroid) {
+      final androidImpl = _notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      final granted = await androidImpl?.requestNotificationsPermission();
+      print('✅ Android 알림 권한: ${granted == true ? "허용됨" : "거부됨"}');
     }
-
-    final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
-    
-    if (iosPlugin != null) {
-      await iosPlugin.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      print('   iOS 알림 권한 요청 완료');
-    }
-
-    print('✅ 권한 요청 완료');
   }
 
-  // 🔥 10초 후 알림 (테스트용)
-  static Future<void> scheduleTenSecondsNotification(int reminderId) async {
-    final now = tz.TZDateTime.now(tz.local);
-    final scheduledDate = now.add(Duration(seconds: 10));
+  // 🔥 ========== 여기부터 새로 추가된 부분 ==========
 
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🔔 10초 후 알림 예약 시작');
-    print('   현재 시간: $now');
-    print('   예약 시간: $scheduledDate');
-    print('   Reminder ID: $reminderId');
-    print('   플랫폼: ${Platform.isIOS ? "iOS" : "Android"}');
-    print('   현재 앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
-
-    // 🔥 Android: 포그라운드면 바로 화면 이동
-    if (Platform.isAndroid && _isAppInForeground) {
-      print('✅ Android 포그라운드 - 10초 후 바로 화면 이동');
-      
-      Future.delayed(Duration(seconds: 10), () {
-        if (navigatorKey.currentState != null) {
-          print('✅ 10초 경과 - 화면 이동!');
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => NotificationScreen(
-                reminderId: reminderId,
-              ),
-            ),
-          );
-        }
-      });
-      
+  // 🔥 모든 활성화된 알림 재예약
+  static Future<void> rescheduleAllNotifications() async {
+    try {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      return;
+      print('🔄 알림 재예약 시작...');
+
+      // 1. 기존 예약된 알림 전부 취소
+      await _notifications.cancelAll();
+      print('   ✅ 기존 알림 전부 취소');
+
+      // 2. DB에서 활성화된 Reminder 가져오기
+      final reminders = await DatabaseHelper.getEnabledReminders();
+      print('   📋 활성화된 알림: ${reminders.length}개');
+
+      if (reminders.isEmpty) {
+        print('   ⚠️  활성화된 알림이 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      final now = DateTime.now();
+
+      // 3. 각 Reminder의 다음 알림 시간 계산 & 예약
+      for (var reminder in reminders) {
+        final nextTime = _calculateNextNotificationTime(reminder, now);
+        await _scheduleNotificationAt(reminder, nextTime);
+        print('   ✅ ${reminder.title} - $nextTime 예약');
+      }
+
+      print('🎉 알림 재예약 완료!');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 알림 재예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 다음 알림 시간 계산
+  static DateTime _calculateNextNotificationTime(Reminder reminder, DateTime from) {
+    // 오늘의 첫 알림 시간
+    var nextTime = DateTime(
+      from.year,
+      from.month,
+      from.day,
+      reminder.hour24,
+      reminder.minute,
+    );
+
+    // 이미 지났으면 다음 스케줄로
+    while (nextTime.isBefore(from)) {
+      if (reminder.repeatHour == 0 && reminder.repeatMinute == 0) {
+        // 하루에 한 번 → 내일
+        nextTime = nextTime.add(Duration(days: 1));
+      } else {
+        // 반복 간격만큼 추가
+        nextTime = nextTime.add(Duration(
+          hours: reminder.repeatHour,
+          minutes: reminder.repeatMinute,
+        ));
+      }
     }
 
-    // 🔥 iOS는 항상 알림 예약 (AppDelegate에서 처리)
-    // 🔥 Android 백그라운드도 알림 예약
-    print('✅ 알림 예약 (iOS 또는 Android 백그라운드)');
+    return nextTime;
+  }
 
-    const androidDetails = AndroidNotificationDetails(
-      'test_channel',
-      'Test Notifications',
-      channelDescription: 'Test notification channel',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-      visibility: NotificationVisibility.public,
-      ticker: '약 먹을 시간입니다!',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      sound: 'default',
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
+  // 🔥 특정 시간에 알림 예약 (내부용)
+  static Future<void> _scheduleNotificationAt(Reminder reminder, DateTime scheduledTime) async {
     await _notifications.zonedSchedule(
-      998,
-      '💊 약 먹을 시간!',
-      '지금 복용하세요',
-      scheduledDate,
-      details,
+      reminder.id!,
+      '약 먹을 시간이에요!',
+      reminder.title,
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medication_channel',
+          '약 알림',
+          channelDescription: '약 복용 알림',
+          importance: Importance.max,
+          priority: Priority.high,
+          fullScreenIntent: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: reminder.id.toString(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // 🔥 ========== 여기까지 새로 추가된 부분 ==========
+
+  // 🔥 10초 후 알림 (테스트용) - 기존 코드 유지
+  static Future<void> scheduleTenSecondsNotification(int reminderId) async {
+    final scheduledTime = DateTime.now().add(Duration(seconds: 10));
+
+    await _notifications.zonedSchedule(
+      reminderId,
+      '약 먹을 시간이에요!',
+      '10초 테스트 알림',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medication_channel',
+          '약 알림',
+          channelDescription: '약 복용 알림',
+          importance: Importance.max,
+          priority: Priority.high,
+          fullScreenIntent: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
       payload: reminderId.toString(),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    print('✅ 알림 예약 성공!');
-
-    final pending = await getPendingNotifications();
-    print('📋 현재 예약된 알림 개수: ${pending.length}');
-    for (var notification in pending) {
-      print('   - ID: ${notification.id}, 제목: ${notification.title}');
-    }
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('⏰ 10초 후 알림 예약: ${reminderId}');
+    print('   예약 시간: $scheduledTime');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+
+  // 🔥 새로운 알림 예약 메서드
+  static Future<void> scheduleNotification(Reminder reminder) async {
+    if (!reminder.isEnabled) return;
+
+    // 🔥 기존 알림 취소
+    await _notifications.cancel(reminder.id!);
+
+    // 🔥 오늘 날짜 기준으로 스케줄 계산
+    final today = DateTime.now();
+    final schedules = reminder.calculateDailySchedules(today);
+
+    print('📅 ${reminder.title} - ${schedules.length}개 스케줄 예약');
+
+    for (var scheduleTime in schedules) {
+      if (scheduleTime.isAfter(DateTime.now())) {
+        // 🔥 알림 예약 로직
+        await _notifications.zonedSchedule(
+          reminder.id! + schedules.indexOf(scheduleTime), // 고유 ID
+          reminder.title,
+          '${reminder.title} 복용 시간입니다',
+          tz.TZDateTime.from(scheduleTime, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'medication_channel',
+              'Medication Reminders',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        
+        print('⏰ ${scheduleTime.toString()} 예약 완료');
+      }
+    }
   }
 
   static Future<void> cancelNotification(int id) async {

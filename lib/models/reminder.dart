@@ -8,7 +8,7 @@ class Reminder {
   final int repeatHour;
   final int repeatMinute;
   final bool isEnabled;
-  final DateTime createdAt;
+  final String createdAt;
 
   Reminder({
     this.id,
@@ -19,8 +19,8 @@ class Reminder {
     required this.repeatHour,
     required this.repeatMinute,
     required this.isEnabled,
-    required this.createdAt,
-  });
+    String? createdAt, // 🔥 생성 시 null 허용
+  }) : createdAt = createdAt ?? DateTime.now().toIso8601String(); // 🔥 기본값 설정
 
   // 🔥 24시간 형식으로 변환
   int get hour24 {
@@ -90,7 +90,7 @@ class Reminder {
       repeatHour: map['repeatHour'],
       repeatMinute: map['repeatMinute'],
       isEnabled: map['isEnabled'] == 1,
-      createdAt: DateTime.parse(map['createdAt']),
+      createdAt: map['createdAt'], // 🔥 DB에서 가져온 값 사용
     );
   }
 
@@ -105,7 +105,7 @@ class Reminder {
       'repeatHour': repeatHour,
       'repeatMinute': repeatMinute,
       'isEnabled': isEnabled ? 1 : 0,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt, // 🔥 생성자에서 이미 설정된 값 사용
     };
   }
 }

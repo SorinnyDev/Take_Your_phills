@@ -92,6 +92,28 @@ class DatabaseHelper {
     );
   }
 
+  // 🔥 활성화된 알림만 가져오기
+  static Future<List<Reminder>> getEnabledReminders() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'reminders',
+      where: 'isEnabled = ?',
+      whereArgs: [1],
+    );
+    return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
+  }
+
+  static Future<Reminder?> getReminderById(int id) async {
+    final db = await database;
+    final maps = await db.query(
+      'reminders',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isEmpty) return null;
+    return Reminder.fromMap(maps.first);
+  }
+
   // ========== MedicationRecord 관련 메서드 ==========
   
   static Future<int> insertRecord(MedicationRecord record) async {

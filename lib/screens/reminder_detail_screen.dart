@@ -94,7 +94,7 @@ class _ReminderDetailScreenState extends State<ReminderDetailScreen> {
         repeatHour: repeatHour,
         repeatMinute: repeatMinute,
         isEnabled: isEnabled,
-        createdAt: DateTime.now(),
+        createdAt: DateTime.now().toIso8601String(),
       );
 
       await DatabaseHelper.insertReminder(newReminder);
