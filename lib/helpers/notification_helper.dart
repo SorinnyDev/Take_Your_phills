@@ -61,21 +61,28 @@ class NotificationHelper {
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
 
-    if (call.method == 'onForegroundNotification') {
-      if (_isAppInForeground) {
-        final payload = call.arguments as String?;
-        print('   ✅ 포그라운드 알림 수신 - Payload: $payload');
-        
-        if (payload != null) {
-          final reminderId = int.tryParse(payload);
-          if (reminderId != null) {
-            print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
-            
-            navigatorKey.currentState?.push(
+    if (call.method == 'onNotificationTap' || call.method == 'onForegroundNotification') {
+      final payload = call.arguments as String?;
+      print('   ✅ 알림 수신 - Payload: $payload');
+      
+      if (payload != null) {
+        final reminderId = int.tryParse(payload);
+        if (reminderId != null) {
+          print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
+          
+          // 🔥 navigatorKey 상태 확인
+          print('   navigatorKey.currentState: ${navigatorKey.currentState}');
+          print('   navigatorKey.currentContext: ${navigatorKey.currentContext}');
+          
+          if (navigatorKey.currentState != null) {
+            navigatorKey.currentState!.push(
               MaterialPageRoute(
                 builder: (context) => NotificationScreen(reminderId: reminderId),
               ),
             );
+            print('   ✅ 화면 이동 완료!');
+          } else {
+            print('   ❌ navigatorKey.currentState가 null입니다!');
           }
         }
       }

@@ -17,11 +17,7 @@ void main() async {
   // 🔥 앱 시작 시 알림 재예약 (재부팅 대응)
   await _rescheduleAllNotifications();
   
-  runApp(
-    AppLifecycleObserver(
-      child: MyApp(),
-    ),
-  );
+  runApp(MyApp());  // 🔥 AppLifecycleObserver 제거
 }
 
 // 🔥 모든 활성화된 알림 재예약
@@ -48,36 +44,14 @@ Future<void> _rescheduleAllNotifications() async {
   print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {  // 🔥 StatefulWidget으로 변경
   const MyApp({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Take Your Pills',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: MainScreen(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
+  State<MyApp> createState() => _MyAppState();
 }
 
-// 🔥 앱 라이프사이클 관찰 위젯
-class AppLifecycleObserver extends StatefulWidget {
-  final Widget child;
-
-  const AppLifecycleObserver({Key? key, required this.child}) : super(key: key);
-
-  @override
-  State<AppLifecycleObserver> createState() => _AppLifecycleObserverState();
-}
-
-class _AppLifecycleObserverState extends State<AppLifecycleObserver>
-    with WidgetsBindingObserver {
-  
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {  // 🔥 LifecycleObserver 통합
   @override
   void initState() {
     super.initState();
@@ -123,6 +97,15 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
 
   @override
   Widget build(BuildContext context) {
-    return widget.child;
+    return MaterialApp(
+      title: 'Take Your Pills',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      navigatorKey: NotificationHelper.navigatorKey,  // 🔥 추가!
+      home: MainScreen(),
+      debugShowCheckedModeBanner: false,
+    );
   }
 }
