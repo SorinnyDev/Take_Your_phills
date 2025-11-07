@@ -43,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
+      // 🔥 FloatingActionButton 제거 (디버깅용이었음)
     );
   }
 }

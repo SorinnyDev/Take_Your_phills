@@ -1,62 +1,57 @@
 
 import 'package:flutter/material.dart';
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 import 'helpers/notification_helper.dart';
 import 'helpers/database_helper.dart';
 import 'screens/main_screen.dart';
 
+Future<void> _rescheduleAllNotifications() async {
+  await NotificationHelper.rescheduleAllNotifications();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 🔥 타임존 초기화
-  tz.initializeTimeZones();
+  tz_data.initializeTimeZones();
   
-  // 🔥 알림 초기화
   await NotificationHelper.initialize();
   
-  // 🔥 앱 시작 시 알림 재예약 (재부팅 대응)
   await _rescheduleAllNotifications();
   
-  runApp(MyApp());  // 🔥 AppLifecycleObserver 제거
+  runApp(MyApp());
 }
 
-// 🔥 모든 활성화된 알림 재예약
-Future<void> _rescheduleAllNotifications() async {
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔄 알림 재예약 시작...');
-  
-  try {
-    final reminders = await DatabaseHelper.getAllReminders();
-    final enabledReminders = reminders.where((r) => r.isEnabled).toList();
-    
-    print('📋 활성화된 알림: ${enabledReminders.length}개');
-    
-    for (var reminder in enabledReminders) {
-      await NotificationHelper.scheduleNotification(reminder);
-      print('✅ ${reminder.title} 재예약 완료');
-    }
-    
-    print('🎉 알림 재예약 완료!');
-  } catch (e) {
-    print('❌ 알림 재예약 실패: $e');
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Take Your Pills',
+      navigatorKey: NotificationHelper.navigatorKey,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: AppLifecycleWrapper(child: MainScreen()),
+      debugShowCheckedModeBanner: false,
+    );
   }
-  
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
-class MyApp extends StatefulWidget {  // 🔥 StatefulWidget으로 변경
-  const MyApp({Key? key}) : super(key: key);
+class AppLifecycleWrapper extends StatefulWidget {
+  final Widget child;
+
+  const AppLifecycleWrapper({Key? key, required this.child}) : super(key: key);
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<AppLifecycleWrapper> createState() => _AppLifecycleWrapperState();
 }
 
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {  // 🔥 LifecycleObserver 통합
+class _AppLifecycleWrapperState extends State<AppLifecycleWrapper> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    print('🎯 AppLifecycleObserver 시작');
   }
 
   @override
@@ -67,45 +62,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {  // 🔥 Li
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🔄 앱 상태 변경: $state');
+    super.didChangeAppLifecycleState(state);
     
     switch (state) {
       case AppLifecycleState.resumed:
-        print('✅ 앱 포그라운드 진입 - 알림 재예약 시작');
-        _rescheduleAllNotifications();
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        print('✅ 앱 포그라운드 진입');
+        NotificationHelper.updateAppState(true);
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         break;
-        
       case AppLifecycleState.paused:
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         print('⏸️ 앱 백그라운드 진입');
+        NotificationHelper.updateAppState(false);
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         break;
-        
-      case AppLifecycleState.inactive:
-        print('⏸️ 앱 비활성 상태');
-        break;
-        
-      case AppLifecycleState.detached:
-        print('🔴 앱 종료 중');
-        break;
-        
-      case AppLifecycleState.hidden:
-        print('👻 앱 숨김 상태');
+      default:
         break;
     }
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Take Your Pills',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      navigatorKey: NotificationHelper.navigatorKey,  // 🔥 추가!
-      home: MainScreen(),
-      debugShowCheckedModeBanner: false,
-    );
+    return widget.child;
   }
 }
