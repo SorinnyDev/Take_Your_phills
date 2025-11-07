@@ -17,6 +17,9 @@ class NotificationHelper {
 
   // 🔥 앱이 포그라운드인지 추적
   static bool _isAppInForeground = true;
+  
+  // 🔥 중복 호출 방지 플래그
+  static bool _isHandlingNotification = false;
 
   static Future<void> initialize() async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -37,6 +40,12 @@ class NotificationHelper {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (details) async {
+        // 🔥 이미 처리 중이면 무시
+        if (_isHandlingNotification) {
+          print('⚠️  이미 알림 처리 중 - 무시');
+          return;
+        }
+
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         print('📱 알림 탭 감지 (Flutter)');
         print('   Payload: ${details.payload}');
@@ -45,18 +54,7 @@ class NotificationHelper {
         if (details.payload != null) {
           final reminderId = int.tryParse(details.payload!);
           if (reminderId != null) {
-            print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
-            
-            if (navigatorKey.currentState != null) {
-              navigatorKey.currentState!.push(
-                MaterialPageRoute(
-                  builder: (context) => NotificationScreen(reminderId: reminderId),
-                ),
-              );
-              print('   ✅ 화면 이동 완료!');
-            } else {
-              print('   ❌ navigatorKey.currentState가 null입니다!');
-            }
+            await _navigateToNotificationScreen(reminderId);
           }
         }
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -98,35 +96,67 @@ class NotificationHelper {
   }
 
   static Future<void> _handleNativeMethod(MethodCall call) async {
+    // 🔥 이미 처리 중이면 무시
+    if (_isHandlingNotification) {
+      print('⚠️  이미 알림 처리 중 - 무시');
+      return;
+    }
+
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
 
     if (call.method == 'onNotificationTap') {
+      // 🔥 백그라운드에서 알림 탭
       final payload = call.arguments as String?;
-      print('   ✅ 알림 수신 - Payload: $payload');
+      print('   ✅ 백그라운드 알림 탭 - Payload: $payload');
 
       if (payload != null) {
         final reminderId = int.tryParse(payload);
         if (reminderId != null) {
-          print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
+          await _navigateToNotificationScreen(reminderId);
+        }
+      }
+    } else if (call.method == 'onForegroundNotification') {
+      // 🔥 포그라운드에서 알림 트리거
+      final payload = call.arguments as String?;
+      print('   ✅ 포그라운드 알림 트리거 - Payload: $payload');
 
-          if (navigatorKey.currentState != null) {
-            navigatorKey.currentState!.push(
-              MaterialPageRoute(
-                builder: (context) =>
-                    NotificationScreen(reminderId: reminderId),
-              ),
-            );
-            print('   ✅ 화면 이동 완료!');
-          } else {
-            print('   ❌ navigatorKey.currentState가 null입니다!');
-          }
+      if (payload != null) {
+        final reminderId = int.tryParse(payload);
+        if (reminderId != null) {
+          await _navigateToNotificationScreen(reminderId);
         }
       }
     }
 
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+
+  // 🔥 화면 이동 로직 통합 (중복 방지)
+  static Future<void> _navigateToNotificationScreen(int reminderId) async {
+    if (_isHandlingNotification) {
+      print('⚠️  이미 화면 이동 중 - 무시');
+      return;
+    }
+
+    _isHandlingNotification = true;
+    print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
+
+    if (navigatorKey.currentState != null) {
+      await navigatorKey.currentState!.push(
+        MaterialPageRoute(
+          builder: (context) => NotificationScreen(reminderId: reminderId),
+        ),
+      );
+      print('   ✅ 화면 이동 완료!');
+    } else {
+      print('   ❌ navigatorKey.currentState가 null입니다!');
+    }
+
+    // 🔥 화면이 닫힌 후 플래그 리셋
+    await Future.delayed(Duration(milliseconds: 500));
+    _isHandlingNotification = false;
   }
 
   static Future<void> onDidReceiveLocalNotification(
