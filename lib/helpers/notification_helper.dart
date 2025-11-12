@@ -112,6 +112,7 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
+    print('   Arguments Type: ${call.arguments.runtimeType}'); // 🔥 타입 확인
 
     if (call.method == 'onNotificationTap') {
       // 🔥 백그라운드에서 알림 탭
@@ -128,22 +129,31 @@ class NotificationHelper {
       // 🔥 포그라운드에서 알림 트리거
       print('   ✅ 포그라운드 알림 트리거 시작');
       
-      // 🔥 int 또는 String 둘 다 처리
+      // 🔥 Arguments 타입 체크 강화
       int? reminderId;
-      if (call.arguments is int) {
-        reminderId = call.arguments as int;
-      } else if (call.arguments is String) {
-        reminderId = int.tryParse(call.arguments as String);
+      
+      if (call.arguments == null) {
+        print('   ❌ Arguments가 null입니다!');
+        return;
       }
       
-      print('   📍 ReminderId: $reminderId');
+      if (call.arguments is int) {
+        reminderId = call.arguments as int;
+        print('   📍 ReminderId (int): $reminderId');
+      } else if (call.arguments is String) {
+        reminderId = int.tryParse(call.arguments as String);
+        print('   📍 ReminderId (String → int): $reminderId');
+      } else {
+        print('   ❌ 지원하지 않는 타입: ${call.arguments.runtimeType}');
+        return;
+      }
 
       if (reminderId != null) {
         print('   🚀 화면 이동 시작...');
         await _navigateToNotificationScreen(reminderId);
         print('   ✅ 화면 이동 완료!');
       } else {
-        print('   ❌ ReminderId가 null입니다!');
+        print('   ❌ ReminderId 파싱 실패!');
       }
     } else if (call.method == 'updateAppState') {
       // 🔥 Android에서 앱 상태 업데이트

@@ -82,7 +82,6 @@ class MainActivity: FlutterActivity() {
         Log.d("MainActivity", "📦 활성 알림 개수: ${activeNotifications.size}")
         
         if (activeNotifications.isNotEmpty()) {
-            // 🔥 모든 활성 알림 제거
             for (notification in activeNotifications) {
                 val extras = notification.notification.extras
                 val payload = extras?.getString("payload")
@@ -92,12 +91,14 @@ class MainActivity: FlutterActivity() {
                 // 🔥 알림 제거
                 notificationManager.cancel(notification.id)
                 
-                // 🔥 Flutter로 전달
+                // 🔥 Flutter로 전달 (String이 아닌 Int로!)
                 if (payload != null) {
                     val reminderId = payload.toIntOrNull()
                     if (reminderId != null) {
-                        methodChannel?.invokeMethod("onForegroundNotification", reminderId)
-                        Log.d("MainActivity", "   ✅ Flutter로 전달 완료: $reminderId")
+                        Log.d("MainActivity", "   🚀 Flutter로 전달: $reminderId (Int)")
+                        methodChannel?.invokeMethod("onForegroundNotification", reminderId) // 🔥 Int로 전달
+                    } else {
+                        Log.e("MainActivity", "   ❌ Payload를 Int로 변환 실패: $payload")
                     }
                 }
             }
