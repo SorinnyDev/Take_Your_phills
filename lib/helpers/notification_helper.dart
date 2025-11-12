@@ -30,6 +30,7 @@ class NotificationHelper {
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      onDidReceiveLocalNotification: onDidReceiveLocalNotification, // 🔥 추가
     );
 
     const initSettings = InitializationSettings(
@@ -90,6 +91,12 @@ class NotificationHelper {
   // 🔥 앱 상태 업데이트
   static void updateAppState(bool isInForeground) {
     _isAppInForeground = isInForeground;
+    
+    // 🔥 Android에만 상태 전달
+    if (Platform.isAndroid) {
+      platform.invokeMethod('updateAppState', {'isInForeground': isInForeground});
+    }
+    
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 앱 상태 변경: ${isInForeground ? "포그라운드" : "백그라운드"}');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -119,14 +126,31 @@ class NotificationHelper {
       }
     } else if (call.method == 'onForegroundNotification') {
       // 🔥 포그라운드에서 알림 트리거
-      final payload = call.arguments as String?;
-      print('   ✅ 포그라운드 알림 트리거 - Payload: $payload');
+      print('   ✅ 포그라운드 알림 트리거 시작');
+      
+      // 🔥 int 또는 String 둘 다 처리
+      int? reminderId;
+      if (call.arguments is int) {
+        reminderId = call.arguments as int;
+      } else if (call.arguments is String) {
+        reminderId = int.tryParse(call.arguments as String);
+      }
+      
+      print('   📍 ReminderId: $reminderId');
 
-      if (payload != null) {
-        final reminderId = int.tryParse(payload);
-        if (reminderId != null) {
-          await _navigateToNotificationScreen(reminderId);
-        }
+      if (reminderId != null) {
+        print('   🚀 화면 이동 시작...');
+        await _navigateToNotificationScreen(reminderId);
+        print('   ✅ 화면 이동 완료!');
+      } else {
+        print('   ❌ ReminderId가 null입니다!');
+      }
+    } else if (call.method == 'updateAppState') {
+      // 🔥 Android에서 앱 상태 업데이트
+      final args = call.arguments as Map<String, dynamic>?;
+      if (args != null && args.containsKey('isInForeground')) {
+        _isAppInForeground = args['isInForeground'] as bool;
+        print('   📱 Android 앱 상태 업데이트: $_isAppInForeground');
       }
     }
 
@@ -159,6 +183,7 @@ class NotificationHelper {
     _isHandlingNotification = false;
   }
 
+  // 🔥 iOS 포그라운드 알림 처리
   static Future<void> onDidReceiveLocalNotification(
     int id,
     String? title,
@@ -166,11 +191,16 @@ class NotificationHelper {
     String? payload,
   ) async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🍎 iOS 로컬 알림 수신');
-    print('   ID: $id');
-    print('   Title: $title');
-    print('   Body: $body');
-    print('   Payload: $payload');
+    print('🍎 iOS 포그라운드 알림 수신');
+    print('   ID: $id, Payload: $payload');
+    
+    // 🔥 포그라운드면 바로 화면 이동
+    if (_isAppInForeground && payload != null) {
+      final reminderId = int.tryParse(payload);
+      if (reminderId != null) {
+        await _navigateToNotificationScreen(reminderId);
+      }
+    }
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
@@ -274,13 +304,14 @@ class NotificationHelper {
           importance: Importance.max,
           priority: Priority.high,
           fullScreenIntent: true,
-          // 🔥 포그라운드에서 알림 표시 안 함
           visibility: NotificationVisibility.public,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          // 🔥 payload 전달
+          threadIdentifier: 'medication',
         ),
       ),
       payload: reminder.id.toString(),
@@ -319,6 +350,7 @@ class NotificationHelper {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          threadIdentifier: 'medication',
         ),
       ),
       payload: reminderId.toString(),
