@@ -1,5 +1,5 @@
-
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -14,11 +14,12 @@ class NotificationHelper {
       FlutterLocalNotificationsPlugin();
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
-  static const platform = MethodChannel('com.sorinnydev.take_your_pills/notification');
+  static const platform =
+      MethodChannel('com.sorinnydev.take_your_pills/notification');
 
   // 🔥 앱이 포그라운드인지 추적
   static bool _isAppInForeground = true;
-  
+
   // 🔥 중복 호출 방지 플래그
   static bool _isHandlingNotification = false;
 
@@ -37,7 +38,8 @@ class NotificationHelper {
       tz.setLocalLocation(tz.local);
     }
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -62,7 +64,7 @@ class NotificationHelper {
         print('📱 알림 탭 감지 (Flutter)');
         print('   Payload: ${details.payload}');
         print('   앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
-        
+
         if (details.payload != null) {
           final reminderId = int.tryParse(details.payload!);
           if (reminderId != null) {
@@ -100,16 +102,21 @@ class NotificationHelper {
   }
 
   // 🔥 앱 상태 업데이트
-  static void updateAppState(bool isInForeground) {
+  static Future<void> updateAppState(bool isInForeground) async {
     _isAppInForeground = isInForeground;
-    
-    if (Platform.isAndroid) {
-      platform.invokeMethod('updateAppState', {'isInForeground': isInForeground});
-    }
     
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 앱 상태 변경: ${isInForeground ? "포그라운드" : "백그라운드"}');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 🔥 Android에도 상태 전달
+    try {
+      await platform.invokeMethod('updateAppState', {
+        'isInForeground': isInForeground,
+      });
+    } catch (e) {
+      print('⚠️  Android 상태 업데이트 실패: $e');
+    }
   }
 
   static Future<void> _handleNativeMethod(MethodCall call) async {
@@ -135,14 +142,14 @@ class NotificationHelper {
       }
     } else if (call.method == 'onForegroundNotification') {
       print('   ✅ 포그라운드 알림 트리거 시작');
-      
+
       int? reminderId;
-      
+
       if (call.arguments == null) {
         print('   ❌ Arguments가 null입니다!');
         return;
       }
-      
+
       if (call.arguments is int) {
         reminderId = call.arguments as int;
         print('   📍 ReminderId (int): $reminderId');
@@ -207,7 +214,7 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🍎 iOS 포그라운드 알림 수신');
     print('   ID: $id, Payload: $payload');
-    
+
     if (_isAppInForeground && payload != null) {
       final reminderId = int.tryParse(payload);
       if (reminderId != null) {
@@ -313,13 +320,20 @@ class NotificationHelper {
           priority: Priority.high,
           fullScreenIntent: true,
           visibility: NotificationVisibility.public,
+          // 🔥 payload를 extras에 추가 (안드로이드 포그라운드 감지용)
+          additionalFlags: Int32List.fromList([4]), // FLAG_INSISTENT
+          styleInformation: BigTextStyleInformation(
+            reminder.title,
+            contentTitle: '약 먹을 시간이에요!',
+          ),
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          // 🔥 payload 전달
           threadIdentifier: 'medication',
+          // 🔥 userInfo에 reminderId 추가
+          attachments: [],
         ),
       ),
       payload: reminder.id.toString(),
@@ -339,11 +353,17 @@ class NotificationHelper {
     print('⏰ 10초 후 알림 예약: $reminderId');
     print('   예약 시간: $scheduledTime');
 
-    // 🔥 항상 시스템 알림 예약
+    final reminder = await DatabaseHelper.getReminderById(reminderId);
+    if (reminder == null) {
+      print('❌ Reminder를 찾을 수 없습니다');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return;
+    }
+
     await _notifications.zonedSchedule(
       reminderId,
-      '💊 약 먹을 시간이에요!',
-      '10초 테스트 알림',
+      '약 먹을 시간이에요!',
+      reminder.title,
       tz.TZDateTime.from(scheduledTime, tz.local),
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -353,6 +373,13 @@ class NotificationHelper {
           importance: Importance.max,
           priority: Priority.high,
           fullScreenIntent: true,
+          visibility: NotificationVisibility.public,
+          // 🔥 payload를 extras에 추가
+          additionalFlags: Int32List.fromList([4]),
+          styleInformation: BigTextStyleInformation(
+            reminder.title,
+            contentTitle: '약 먹을 시간이에요!',
+          ),
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
@@ -367,7 +394,7 @@ class NotificationHelper {
           UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    print('   ✅ 시스템 알림 예약 완료');
+    print('✅ 10초 후 알림 예약 완료!');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
@@ -426,5 +453,59 @@ class NotificationHelper {
   static Future<List<PendingNotificationRequest>>
       getPendingNotifications() async {
     return await _notifications.pendingNotificationRequests();
+  }
+
+  // 🔥 새로운 알림 표시 메서드
+  static Future<void> _showNotification(int reminderId, String title) async {
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('🔔 알림 표시 시작');
+    print('   ReminderId: $reminderId');
+    print('   Title: $title');
+
+    // 🔥 포그라운드일 때는 즉시 화면 이동
+    if (_isAppInForeground) {
+      print('   🚀 포그라운드 → 즉시 화면 이동!');
+      await _navigateToNotificationScreen(reminderId);
+    }
+
+    // 🔥 알림은 항상 표시 (백그라운드/포그라운드 모두)
+    final androidDetails = AndroidNotificationDetails(
+      'medication_channel',
+      'Medication Reminders',
+      channelDescription: 'Notifications for medication reminders',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: false,
+      enableVibration: false,
+      ongoing: true,
+      autoCancel: false,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      styleInformation: BigTextStyleInformation(
+        title,
+        htmlFormatBigText: false,
+        contentTitle: '💊 약 먹을 시간이에요!',
+        htmlFormatContentTitle: false,
+      ),
+      additionalFlags: Int32List.fromList([
+        0x10000000, // FLAG_ACTIVITY_NEW_TASK
+        0x20000000, // FLAG_ACTIVITY_SINGLE_TOP
+      ]),
+    );
+
+    // 🔥 const 제거!
+    final details = NotificationDetails(android: androidDetails);
+
+    await _notifications.show(
+      reminderId,
+      '💊 약 먹을 시간이에요!',
+      title,
+      details,
+      payload: reminderId.toString(),
+    );
+
+    print('✅ 알림 표시 완료!');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 }

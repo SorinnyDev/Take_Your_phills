@@ -3,7 +3,6 @@ import UIKit
 import Flutter
 import flutter_local_notifications
 
-@main
 @objc class AppDelegate: FlutterAppDelegate {
   private var methodChannel: FlutterMethodChannel?
   
@@ -11,20 +10,19 @@ import flutter_local_notifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-
-    // 🔥 알림 권한 요청
-    if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self
-    }
-
-    // 🔥 MethodChannel 설정
+    GeneratedPluginRegistrant.register(with: self)
+    
     let controller = window?.rootViewController as! FlutterViewController
     methodChannel = FlutterMethodChannel(
       name: "com.sorinnydev.take_your_pills/notification",
       binaryMessenger: controller.binaryMessenger
     )
-
-    GeneratedPluginRegistrant.register(with: self)
+    
+    // 🔥 알림 센터 델리게이트 설정
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self
+    }
+    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
@@ -34,36 +32,24 @@ import flutter_local_notifications
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
+    let userInfo = notification.request.content.userInfo
+    let reminderId = userInfo["reminderId"] as? String ?? ""
+    
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("🍎 iOS 포그라운드 알림 수신")
+    print("   ReminderId: \(reminderId)")
     
-    let userInfo = notification.request.content.userInfo
-    if let payload = userInfo["payload"] as? String {
-      print("   Payload: \(payload)")
-      
-      // 🔥 Flutter로 전달
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-        self.methodChannel?.invokeMethod("onForegroundNotification", arguments: payload)
-        print("   ✅ Flutter로 전달 완료")
-      }
-      
-      // 🔥 알림 표시 안 함 (iOS 버전별 분기)
-      if #available(iOS 14.0, *) {
-        completionHandler([])
-      } else {
-        completionHandler([])
-      }
+    // 🔥 Flutter로 알림 전달
+    methodChannel?.invokeMethod("onForegroundNotification", arguments: reminderId)
+    
+    // 🔥 시스템 알림도 표시 (배너 + 소리 + 뱃지)
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .sound, .badge])
     } else {
-      print("   ⚠️  Payload 없음")
-      
-      // 🔥 iOS 버전별 알림 표시 옵션
-      if #available(iOS 14.0, *) {
-        completionHandler([.banner, .sound, .badge])
-      } else {
-        completionHandler([.alert, .sound, .badge])
-      }
+      completionHandler([.alert, .sound, .badge])
     }
     
+    print("   ✅ 시스템 알림 표시 완료")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
   }
   
@@ -73,21 +59,19 @@ import flutter_local_notifications
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
+    let userInfo = response.notification.request.content.userInfo
+    let reminderId = userInfo["reminderId"] as? String ?? ""
+    
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("🍎 iOS 백그라운드 알림 탭")
+    print("   ReminderId: \(reminderId)")
     
-    let userInfo = response.notification.request.content.userInfo
-    if let payload = userInfo["payload"] as? String {
-      print("   Payload: \(payload)")
-      
-      // 🔥 Flutter로 전달
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-        self.methodChannel?.invokeMethod("onNotificationTap", arguments: payload)
-        print("   ✅ Flutter로 전달 완료")
-      }
-    }
+    // 🔥 Flutter로 알림 전달
+    methodChannel?.invokeMethod("onNotificationTap", arguments: reminderId)
+    
+    print("   ✅ Flutter 메서드 호출 완료")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     
     completionHandler()
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
   }
 }
