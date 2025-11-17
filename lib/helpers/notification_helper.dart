@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import '../screens/notification_screen.dart';
 import '../models/reminder.dart';
@@ -25,12 +26,23 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🔔 NotificationHelper 초기화 시작');
 
+    // 🔥 timezone 초기화 (수정됨!)
+    try {
+      tz_data.initializeTimeZones(); // 🔥 tz_data 사용!
+      tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+      print('✅ Timezone 초기화 완료');
+    } catch (e) {
+      print('⚠️  Timezone 초기화 실패: $e');
+      // 기본 로컬 타임존 사용
+      tz.setLocalLocation(tz.local);
+    }
+
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
-      onDidReceiveLocalNotification: onDidReceiveLocalNotification, // 🔥 추가
+      onDidReceiveLocalNotification: onDidReceiveLocalNotification,
     );
 
     const initSettings = InitializationSettings(
@@ -41,7 +53,6 @@ class NotificationHelper {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (details) async {
-        // 🔥 이미 처리 중이면 무시
         if (_isHandlingNotification) {
           print('⚠️  이미 알림 처리 중 - 무시');
           return;
@@ -68,8 +79,8 @@ class NotificationHelper {
       '약 알림',
       description: '약 복용 알림',
       importance: Importance.max,
-      playSound: false, // 시스템 소리 끔 (앱에서 직접 재생)
-      enableVibration: false, // 시스템 진동 끔 (앱에서 직접 제어)
+      playSound: false,
+      enableVibration: false,
       showBadge: true,
     );
 
@@ -92,7 +103,6 @@ class NotificationHelper {
   static void updateAppState(bool isInForeground) {
     _isAppInForeground = isInForeground;
     
-    // 🔥 Android에만 상태 전달
     if (Platform.isAndroid) {
       platform.invokeMethod('updateAppState', {'isInForeground': isInForeground});
     }
@@ -103,7 +113,6 @@ class NotificationHelper {
   }
 
   static Future<void> _handleNativeMethod(MethodCall call) async {
-    // 🔥 이미 처리 중이면 무시
     if (_isHandlingNotification) {
       print('⚠️  이미 알림 처리 중 - 무시');
       return;
@@ -112,10 +121,9 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
-    print('   Arguments Type: ${call.arguments.runtimeType}'); // 🔥 타입 확인
+    print('   Arguments Type: ${call.arguments.runtimeType}');
 
     if (call.method == 'onNotificationTap') {
-      // 🔥 백그라운드에서 알림 탭
       final payload = call.arguments as String?;
       print('   ✅ 백그라운드 알림 탭 - Payload: $payload');
 
@@ -126,10 +134,8 @@ class NotificationHelper {
         }
       }
     } else if (call.method == 'onForegroundNotification') {
-      // 🔥 포그라운드에서 알림 트리거
       print('   ✅ 포그라운드 알림 트리거 시작');
       
-      // 🔥 Arguments 타입 체크 강화
       int? reminderId;
       
       if (call.arguments == null) {
@@ -156,7 +162,6 @@ class NotificationHelper {
         print('   ❌ ReminderId 파싱 실패!');
       }
     } else if (call.method == 'updateAppState') {
-      // 🔥 Android에서 앱 상태 업데이트
       final args = call.arguments as Map<String, dynamic>?;
       if (args != null && args.containsKey('isInForeground')) {
         _isAppInForeground = args['isInForeground'] as bool;
@@ -167,7 +172,7 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  // 🔥 화면 이동 로직 통합 (중복 방지)
+  // 🔥 화면 이동 로직 통합
   static Future<void> _navigateToNotificationScreen(int reminderId) async {
     if (_isHandlingNotification) {
       print('⚠️  이미 화면 이동 중 - 무시');
@@ -188,7 +193,6 @@ class NotificationHelper {
       print('   ❌ navigatorKey.currentState가 null입니다!');
     }
 
-    // 🔥 화면이 닫힌 후 플래그 리셋
     await Future.delayed(Duration(milliseconds: 500));
     _isHandlingNotification = false;
   }
@@ -204,7 +208,6 @@ class NotificationHelper {
     print('🍎 iOS 포그라운드 알림 수신');
     print('   ID: $id, Payload: $payload');
     
-    // 🔥 포그라운드면 바로 화면 이동
     if (_isAppInForeground && payload != null) {
       final reminderId = int.tryParse(payload);
       if (reminderId != null) {
@@ -221,7 +224,6 @@ class NotificationHelper {
               IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     } else if (Platform.isAndroid) {
-      // 🔥 Android 13+ 알림 권한 요청
       final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
           _notifications.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
@@ -230,19 +232,15 @@ class NotificationHelper {
     }
   }
 
-  // 🔥 ========== 여기부터 새로 추가된 부분 ==========
-
   // 🔥 모든 활성화된 알림 재예약
   static Future<void> rescheduleAllNotifications() async {
     try {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       print('🔄 알림 재예약 시작...');
 
-      // 1. 기존 예약된 알림 전부 취소
       await _notifications.cancelAll();
       print('   ✅ 기존 알림 전부 취소');
 
-      // 2. DB에서 활성화된 Reminder 가져오기
       final reminders = await DatabaseHelper.getEnabledReminders();
       print('   📋 활성화된 알림: ${reminders.length}개');
 
