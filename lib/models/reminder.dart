@@ -8,7 +8,7 @@ class Reminder {
   final int repeatHour;
   final int repeatMinute;
   final bool isEnabled;
-  final String createdAt;
+  final DateTime createdAt;
 
   Reminder({
     this.id,
@@ -19,16 +19,46 @@ class Reminder {
     required this.repeatHour,
     required this.repeatMinute,
     required this.isEnabled,
-    String? createdAt, // 🔥 생성 시 null 허용
-  }) : createdAt = createdAt ?? DateTime.now().toIso8601String(); // 🔥 기본값 설정
+    required this.createdAt,
+  });
 
-  // 🔥 24시간 형식으로 변환
+  // 🔥 24시간 형식 시간
   int get hour24 {
     if (amPm == 'AM') {
       return hour == 12 ? 0 : hour;
     } else {
       return hour == 12 ? 12 : hour + 12;
     }
+  }
+
+  // 🔥 다음 알림 시간 계산
+  DateTime get nextScheduledTime {
+    final now = DateTime.now();
+    
+    // 오늘의 첫 알림 시간
+    var nextTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      hour24,
+      minute,
+    );
+
+    // 이미 지났으면 다음 스케줄로
+    while (nextTime.isBefore(now)) {
+      if (repeatHour == 0 && repeatMinute == 0) {
+        // 하루에 한 번 → 내일
+        nextTime = nextTime.add(Duration(days: 1));
+      } else {
+        // 반복 간격만큼 추가
+        nextTime = nextTime.add(Duration(
+          hours: repeatHour,
+          minutes: repeatMinute,
+        ));
+      }
+    }
+
+    return nextTime;
   }
 
   // 🔥 하루 동안의 모든 스케줄 시간 계산 (자정에서 리셋)
@@ -90,7 +120,7 @@ class Reminder {
       repeatHour: map['repeatHour'],
       repeatMinute: map['repeatMinute'],
       isEnabled: map['isEnabled'] == 1,
-      createdAt: map['createdAt'], // 🔥 DB에서 가져온 값 사용
+      createdAt: DateTime.parse(map['createdAt']), // 🔥 DB에서 가져온 값 사용
     );
   }
 
@@ -105,7 +135,7 @@ class Reminder {
       'repeatHour': repeatHour,
       'repeatMinute': repeatMinute,
       'isEnabled': isEnabled ? 1 : 0,
-      'createdAt': createdAt, // 🔥 생성자에서 이미 설정된 값 사용
+      'createdAt': createdAt.toIso8601String(), // 🔥 생성자에서 이미 설정된 값 사용
     };
   }
 }

@@ -1,8 +1,7 @@
-
 import UIKit
 import Flutter
-import flutter_local_notifications
 
+@main
 @objc class AppDelegate: FlutterAppDelegate {
   private var methodChannel: FlutterMethodChannel?
   
@@ -18,7 +17,6 @@ import flutter_local_notifications
       binaryMessenger: controller.binaryMessenger
     )
     
-    // 🔥 알림 센터 델리게이트 설정
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
     }
@@ -26,50 +24,55 @@ import flutter_local_notifications
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  // 🔥 포그라운드에서 알림 수신 시 호출
+  // 🔥 포그라운드 알림 수신
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    let userInfo = notification.request.content.userInfo
-    let reminderId = userInfo["reminderId"] as? String ?? ""
+    // 🔥 Flutter Local Notifications의 payload 가져오기
+    let request = notification.request
+    let identifier = request.identifier
+    
+    // 🔥 identifier에서 reminderId 추출 (flutter_local_notifications는 id를 identifier로 사용)
+    let reminderId = Int(identifier) ?? 0
     
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("🍎 iOS 포그라운드 알림 수신")
+    print("   Identifier: \(identifier)")
     print("   ReminderId: \(reminderId)")
     
-    // 🔥 Flutter로 알림 전달
+    // 🔥 Flutter로 전달
     methodChannel?.invokeMethod("onForegroundNotification", arguments: reminderId)
     
-    // 🔥 시스템 알림도 표시 (배너 + 소리 + 뱃지)
+    // 🔥 시스템 알림 표시
     if #available(iOS 14.0, *) {
       completionHandler([.banner, .sound, .badge])
     } else {
       completionHandler([.alert, .sound, .badge])
     }
     
-    print("   ✅ 시스템 알림 표시 완료")
+    print("   ✅ Flutter 호출 완료")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
   }
   
-  // 🔥 백그라운드에서 알림 탭 시 호출
+  // 🔥 백그라운드 알림 탭
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
-    let userInfo = response.notification.request.content.userInfo
-    let reminderId = userInfo["reminderId"] as? String ?? ""
+    let request = response.notification.request
+    let identifier = request.identifier
     
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("🍎 iOS 백그라운드 알림 탭")
-    print("   ReminderId: \(reminderId)")
+    print("   Identifier: \(identifier)")
     
-    // 🔥 Flutter로 알림 전달
-    methodChannel?.invokeMethod("onNotificationTap", arguments: reminderId)
+    // 🔥 String으로 전달 (Flutter에서 int.tryParse로 변환)
+    methodChannel?.invokeMethod("onNotificationTap", arguments: identifier)
     
-    print("   ✅ Flutter 메서드 호출 완료")
+    print("   ✅ Flutter 호출 완료")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     
     completionHandler()

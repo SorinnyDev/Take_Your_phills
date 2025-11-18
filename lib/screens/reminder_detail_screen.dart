@@ -81,29 +81,27 @@ class _ReminderDetailScreenState extends State<ReminderDetailScreen> {
 
   void _saveReminder() async {
     if (titleController.text.trim().isEmpty) {
-      _showToast('알림 제목을 입력해주세요');
+      _showToast('약 이름을 입력해주세요');
       return;
     }
 
-    if (widget.reminder == null) {
-      final newReminder = Reminder(
-        title: titleController.text.trim(),
-        amPm: amPm,
-        hour: hour,
-        minute: minute,
-        repeatHour: repeatHour,
-        repeatMinute: repeatMinute,
-        isEnabled: isEnabled,
-        createdAt: DateTime.now().toIso8601String(),
-      );
+    final newReminder = Reminder(
+      title: titleController.text.trim(),
+      amPm: amPm,
+      hour: hour,
+      minute: minute,
+      repeatHour: repeatHour,
+      repeatMinute: repeatMinute,
+      isEnabled: isEnabled,
+      createdAt: DateTime.now(), // 🔥 String → DateTime
+    );
 
-      await DatabaseHelper.insertReminder(newReminder);
-      _showToast('알림이 생성되었습니다');
-    } else {
-      _updateReminder();
+    await DatabaseHelper.insertReminder(newReminder);
+    _showToast('알림이 추가되었습니다');
+    
+    if (mounted) {
+      Navigator.pop(context, true);
     }
-
-    Navigator.pop(context, true);
   }
 
   void _updateReminder() async {
