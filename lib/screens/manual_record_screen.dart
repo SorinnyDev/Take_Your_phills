@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../models/medication_record.dart';
 import '../helpers/database_helper.dart';
+import '../helpers/notification_helper.dart';
 
 class ManualRecordScreen extends StatefulWidget {
   @override
@@ -82,26 +83,29 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
   Future<void> _saveRecord(String scheduleType) async {
     if (_selectedReminder == null) return;
 
-    final record = MedicationRecord(
-      medicineName: _selectedReminder!.title,
+    // 🔥 MedicationRecord 생성 시 scheduledTime 추가!
+    await DatabaseHelper.insertMedicationRecord(
+      reminderId: _selectedReminder!.id!,
+      scheduledTime: _takenTime, // 🔥 추가!
       takenAt: _takenTime,
-      note: 'Reminder ID: ${_selectedReminder!.id}, Type: $scheduleType',
+      status: 'taken',
+      note: 'Manual record - Type: $scheduleType',
     );
 
-    await DatabaseHelper.insertRecord(record);
+    // 🔥 다음 알림 예약
+    await NotificationHelper.scheduleNextNotification(_selectedReminder!.id!);
 
-    // 🔥 다음 알림 시간 업데이트 (TODO: 구현 필요)
-    // await _updateNextNotification(scheduleType);
-
-    Navigator.pop(context);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_selectedReminder!.title} 복용 기록 완료!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (mounted) {
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_selectedReminder!.title} 복용 기록 완료!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override

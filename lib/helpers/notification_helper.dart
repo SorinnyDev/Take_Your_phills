@@ -1,12 +1,13 @@
+
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
-import '../screens/notification_screen.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../models/reminder.dart';
+import '../screens/notification_screen.dart';
 import 'database_helper.dart';
 
 class NotificationHelper {
@@ -17,10 +18,7 @@ class NotificationHelper {
   static const platform =
       MethodChannel('com.sorinnydev.take_your_pills/notification');
 
-  // 🔥 앱이 포그라운드인지 추적
   static bool _isAppInForeground = true;
-
-  // 🔥 중복 호출 방지 플래그
   static bool _isHandlingNotification = false;
 
   static Future<void> initialize() async {
@@ -320,6 +318,159 @@ class NotificationHelper {
     return nextTime;
   }
 
+  // 🔥 스누즈 예약 (10분 후)
+  static Future<void> scheduleSnooze(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏰ 스누즈 예약 시작: $reminderId');
+
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      // 현재 스누즈 카운트 확인
+      final currentCount = reminder.currentSnoozeCount;
+      print('   현재 스누즈 카운트: $currentCount/3');
+
+      if (currentCount >= 3) {
+        print('   ⚠️  스누즈 횟수 초과! 자동 스킵 처리');
+        
+        // 자동 스킵 기록 저장
+        await DatabaseHelper.insertMedicationRecord(
+          reminderId: reminderId,
+          scheduledTime: DateTime.now(),
+          status: 'auto_skipped',
+          note: '3회 스누즈 후 자동 스킵',
+        );
+
+        // 스누즈 카운트 리셋
+        await DatabaseHelper.resetSnoozeCount(reminderId);
+
+        // 다음 정규 알림 예약
+        await scheduleNextNotification(reminderId);
+        
+        print('   ✅ 자동 스킵 완료 + 다음 알림 예약');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      // 스누즈 카운트 증가
+      final newCount = currentCount + 1;
+      await DatabaseHelper.updateSnoozeCount(reminderId, newCount);
+
+      // 10분 후 알림 예약
+      final snoozeTime = DateTime.now().add(Duration(minutes: 10));
+      await _scheduleNotificationAt(reminder, snoozeTime);
+
+      print('   ✅ 스누즈 예약 완료!');
+      print('   📍 예약 시간: $snoozeTime');
+      print('   📊 스누즈 카운트: $newCount/3');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 스누즈 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 다음 정규 알림 예약
+  static Future<void> scheduleNextNotification(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏰ 다음 정규 알림 예약: $reminderId');
+
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      if (!reminder.isEnabled) {
+        print('⚠️  알림이 비활성화되어 있습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      // 스누즈 카운트 리셋
+      await DatabaseHelper.resetSnoozeCount(reminderId);
+
+      // 🔥 현재 시간 이후의 다음 알림 시간 계산
+      final now = DateTime.now();
+      final nextTime = _calculateNextNotificationTime(reminder, now);
+
+      // 알림 예약
+      await _scheduleNotificationAt(reminder, nextTime);
+
+      print('   ✅ 다음 알림 예약 완료!');
+      print('   📍 예약 시간: $nextTime');
+      print('   🔄 스누즈 카운트 리셋: 0/3');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 다음 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 복용 완료 처리
+  static Future<void> markAsTaken(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('✅ 복용 완료 처리: $reminderId');
+
+      // 복용 기록 저장
+      await DatabaseHelper.insertMedicationRecord(
+        reminderId: reminderId,
+        scheduledTime: DateTime.now(),
+        takenAt: DateTime.now(),
+        status: 'taken',
+        note: '복용 완료',
+      );
+
+      // 현재 알림 취소
+      await cancelNotification(reminderId);
+
+      // 다음 알림 예약
+      await scheduleNextNotification(reminderId);
+
+      print('   ✅ 복용 완료 + 다음 알림 예약');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 복용 완료 처리 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 건너뛰기 처리
+  static Future<void> markAsSkipped(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏭️  건너뛰기 처리: $reminderId');
+
+      // 건너뛰기 기록 저장
+      await DatabaseHelper.insertMedicationRecord(
+        reminderId: reminderId,
+        scheduledTime: DateTime.now(),
+        status: 'skipped',
+        note: '사용자가 건너뛰기',
+      );
+
+      // 현재 알림 취소
+      await cancelNotification(reminderId);
+
+      // 다음 알림 예약
+      await scheduleNextNotification(reminderId);
+
+      print('   ✅ 건너뛰기 + 다음 알림 예약');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 건너뛰기 처리 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
   // 🔥 특정 시간에 알림 예약 (내부용)
   static Future<void> _scheduleNotificationAt(
       Reminder reminder, DateTime scheduledTime) async {
@@ -337,8 +488,7 @@ class NotificationHelper {
           priority: Priority.high,
           fullScreenIntent: true,
           visibility: NotificationVisibility.public,
-          // 🔥 payload를 extras에 추가 (안드로이드 포그라운드 감지용)
-          additionalFlags: Int32List.fromList([4]), // FLAG_INSISTENT
+          additionalFlags: Int32List.fromList([4]),
           styleInformation: BigTextStyleInformation(
             reminder.title,
             contentTitle: '약 먹을 시간이에요!',
@@ -349,7 +499,6 @@ class NotificationHelper {
           presentBadge: true,
           presentSound: true,
           threadIdentifier: 'medication',
-          // 🔥 userInfo에 reminderId 추가
           attachments: [],
         ),
       ),
@@ -360,7 +509,17 @@ class NotificationHelper {
     );
   }
 
-  // 🔥 ========== 여기까지 새로 추가된 부분 ==========
+  // 🔥 알림 취소
+  static Future<void> cancelNotification(int? reminderId) async {
+    if (reminderId == null) return;
+
+    try {
+      await _notifications.cancel(reminderId);
+      print('✅ 알림 취소 완료: $reminderId');
+    } catch (e) {
+      print('❌ 알림 취소 실패: $e');
+    }
+  }
 
   // 🔥 10초 후 알림 (테스트용)
   static Future<void> scheduleTenSecondsNotification(int reminderId) async {
@@ -448,17 +607,6 @@ class NotificationHelper {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('❌ 테스트 알림 예약 실패: $e');
-    }
-  }
-
-  static Future<void> cancelNotification(int? reminderId) async {
-    if (reminderId == null) return; // 🔥 null 체크
-
-    try {
-      await _notifications.cancel(reminderId);
-      print('✅ 알림 취소 완료: $reminderId');
-    } catch (e) {
-      print('❌ 알림 취소 실패: $e');
     }
   }
 
