@@ -1,6 +1,6 @@
-
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -8,6 +8,8 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../models/reminder.dart';
 import '../screens/notification_screen.dart';
+import '../screens/notification_screen_blue.dart';
+import '../screens/notification_screen_white.dart';
 import 'database_helper.dart';
 
 class NotificationHelper {
@@ -196,36 +198,71 @@ class NotificationHelper {
 
   // 🔥 화면 이동 로직 통합
   static Future<void> _navigateToNotificationScreen(int reminderId) async {
-    if (_isHandlingNotification) {
-      print('⚠️  이미 화면 이동 중 - 무시');
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      print('⚠️ 네비게이터 컨텍스트를 찾을 수 없습니다. 화면 이동을 스킵합니다.');
       return;
     }
 
-    _isHandlingNotification = true;
-    print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
-
-    if (navigatorKey.currentState != null) {
-      await navigatorKey.currentState!.push(
-        MaterialPageRoute(
-          builder: (context) => NotificationScreen(reminderId: reminderId),
-        ),
-      );
-      print('   ✅ 화면 이동 완료!');
-    } else {
-      print('   ❌ navigatorKey.currentState가 null입니다!');
+    final reminder = await DatabaseHelper.getReminderById(reminderId);
+    if (reminder == null) {
+      print('⚠️ 알림에 해당하는 Reminder를 찾을 수 없습니다: $reminderId');
+      return;
     }
 
-    await Future.delayed(Duration(milliseconds: 500));
-    _isHandlingNotification = false;
+    // 테마를 랜덤으로 결정하여 적절한 화면으로 이동
+    Widget notificationScreen;
+    final randomTheme = Random().nextInt(3); // 0, 1, 2 중 하나를 랜덤으로 선택
+
+    switch (randomTheme) {
+      case 0:
+        notificationScreen = NotificationScreen(reminderId: reminderId);
+        break;
+      case 1:
+        notificationScreen = NotificationScreenBlue(reminderId: reminderId);
+        break;
+      case 2:
+        notificationScreen = NotificationScreenWhite(reminderId: reminderId);
+        break;
+      default:
+        notificationScreen = NotificationScreen(reminderId: reminderId);
+        break;
+    }
+
+    // 화면 이동 로직
+    void navigate(Widget screen) {
+      // 현재 경로가 알림 화면이면 pushReplacement로 교체, 아니면 push
+      if (ModalRoute.of(context)?.settings.name == '/notification') {
+        print('🔄 기존 알림 화면을 새 화면으로 교체합니다.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/notification'),
+            builder: (context) => screen,
+          ),
+        );
+      } else {
+        print('➡️ 새로운 알림 화면으로 이동합니다.');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/notification'),
+            builder: (context) => screen,
+          ),
+        );
+      }
+    }
+
+    navigate(notificationScreen);
   }
 
-  // 🔥 iOS 포그라운드 알림 처리
-  static Future<void> onDidReceiveLocalNotification(
+  // 🔥 iOS 전용: 앱이 포그라운드에 있을 때 알림 수신
+  static void onDidReceiveLocalNotification(
     int id,
     String? title,
     String? body,
     String? payload,
-  ) async {
+  ) {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🍎 iOS 포그라운드 알림 수신');
     print('   ID: $id, Payload: $payload');
@@ -233,7 +270,7 @@ class NotificationHelper {
     if (_isAppInForeground && payload != null) {
       final reminderId = int.tryParse(payload);
       if (reminderId != null) {
-        await _navigateToNotificationScreen(reminderId);
+        _navigateToNotificationScreen(reminderId);
       }
     }
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -337,7 +374,7 @@ class NotificationHelper {
 
       if (currentCount >= 3) {
         print('   ⚠️  스누즈 횟수 초과! 자동 스킵 처리');
-        
+
         // 자동 스킵 기록 저장
         await DatabaseHelper.insertMedicationRecord(
           reminderId: reminderId,
@@ -351,7 +388,7 @@ class NotificationHelper {
 
         // 다음 정규 알림 예약
         await scheduleNextNotification(reminderId);
-        
+
         print('   ✅ 자동 스킵 완료 + 다음 알림 예약');
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         return;
@@ -467,6 +504,57 @@ class NotificationHelper {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('❌ 건너뛰기 처리 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 알림 다시 울림 (스누즈)
+  static Future<void> snoozeNotification(int reminderId, int minutes) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🔄 $minutes분 후 알림 예약: $reminderId');
+
+      await cancelNotification(reminderId);
+
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder != null && reminder.isEnabled) {
+        final snoozedTime = DateTime.now().add(Duration(minutes: minutes));
+        await _scheduleNotificationAt(reminder, snoozedTime);
+        print('   ✅ $minutes분 후 알림 예약 완료: $snoozedTime');
+      } else {
+        print('   ⚠️  알림을 찾을 수 없거나 비활성화 상태');
+      }
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 다시 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
+  // 🔥 다음 날로 알림 건너뛰기
+  static Future<void> skipToNextDay(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏭️  내일 알림으로 건너뛰기: $reminderId');
+
+      await cancelNotification(reminderId);
+
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder != null && reminder.isEnabled) {
+        final now = DateTime.now();
+        // 오늘 밤 자정을 기준으로 다음 스케줄 계산
+        final tomorrow = DateTime(now.year, now.month, now.day + 1);
+        // 🔥 수정: _calculateNextNotificationTime 헬퍼 함수 사용
+        final nextTime = _calculateNextNotificationTime(reminder, tomorrow);
+
+        await _scheduleNotificationAt(reminder, nextTime);
+        print('   ✅ 내일 알림 예약 완료: $nextTime');
+      } else {
+        print('   ⚠️  알림을 찾을 수 없거나 비활성화 상태');
+      }
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 내일 알림 예약 실패: $e');
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
@@ -671,5 +759,75 @@ class NotificationHelper {
 
     print('✅ 알림 표시 완료!');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+
+  // 🔥 알림 탭 처리 메서드
+  static Future<void> onSelectNotification(String? payload) async {
+    if (payload == null) return;
+    final reminderId = int.tryParse(payload);
+    if (reminderId == null) return;
+
+    // 🔥 화면 이동 로직을 _handleNotificationTap으로 위임
+    await _handleNotificationTap(reminderId);
+  }
+
+  // 🔥 알림 탭 시 화면 이동을 처리하는 새로운 비공개 메서드
+  static Future<void> _handleNotificationTap(int reminderId) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      print('⚠️ 네비게이터 컨텍스트를 찾을 수 없습니다.');
+      return;
+    }
+
+    final reminder = await DatabaseHelper.getReminderById(reminderId);
+    if (reminder == null) {
+      print('⚠️ 알림에 해당하는 Reminder를 찾을 수 없습니다: $reminderId');
+      return;
+    }
+
+    // 테마를 랜덤으로 결정하여 적절한 화면으로 이동
+    Widget notificationScreen;
+    final randomTheme = Random().nextInt(3); // 0, 1, 2 중 하나를 랜덤으로 선택
+
+    switch (randomTheme) {
+      case 0:
+        notificationScreen = NotificationScreen(reminderId: reminderId);
+        break;
+      case 1:
+        notificationScreen = NotificationScreenBlue(reminderId: reminderId);
+        break;
+      case 2:
+        notificationScreen = NotificationScreenWhite(reminderId: reminderId);
+        break;
+      default:
+        notificationScreen = NotificationScreen(reminderId: reminderId);
+        break;
+    }
+
+    // 화면 이동 로직
+    void navigate(Widget screen) {
+      // 현재 경로가 알림 화면이면 pushReplacement로 교체, 아니면 push
+      if (ModalRoute.of(context)?.settings.name == '/notification') {
+        print('🔄 기존 알림 화면을 새 화면으로 교체합니다.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/notification'),
+            builder: (context) => screen,
+          ),
+        );
+      } else {
+        print('➡️ 새로운 알림 화면으로 이동합니다.');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/notification'),
+            builder: (context) => screen,
+          ),
+        );
+      }
+    }
+
+    navigate(notificationScreen);
   }
 }

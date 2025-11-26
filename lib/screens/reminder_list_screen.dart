@@ -1,5 +1,6 @@
 
 import 'dart:ui'; // 🔥 블러 효과
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
@@ -8,6 +9,8 @@ import '../widgets/reminder_card.dart';
 import 'reminder_detail_screen.dart';
 import 'manual_record_screen.dart';
 import 'notification_screen.dart';
+import 'notification_screen_blue.dart';
+import 'notification_screen_white.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 class ReminderListScreen extends StatefulWidget {
@@ -126,12 +129,13 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   Future<void> _showImmediateTestNotification() async {
     if (reminders.isNotEmpty) {
       final firstReminder = reminders.first;
+
+      // 🔥 랜덤 로직 제거하고 NotificationScreen으로 고정
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => NotificationScreen(
-            reminderId: firstReminder.id!,
-          ),
+          builder: (context) =>
+              NotificationScreen(reminderId: firstReminder.id!),
         ),
       );
     } else {
