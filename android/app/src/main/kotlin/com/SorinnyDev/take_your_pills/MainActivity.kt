@@ -1,30 +1,33 @@
 
 package com.sorinnydev.take_your_pills
 
-import android.app.NotificationManager
-import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.service.notification.StatusBarNotification
-import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.app.NotificationManager
+import android.util.Log
+import android.service.notification.StatusBarNotification
+import android.content.Context
+import android.content.Intent
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.sorinnydev.take_your_pills/notification"
     private var methodChannel: MethodChannel? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val checkInterval = 500L
     private var isCheckingNotification = false
-    private val processedNotifications = mutableSetOf<Int>()
+    private var isAppInForeground = false
     
-    companion object {
-        var isAppInForeground = false
-        var pendingNotificationPayload: String? = null
-    }
+    // 🔥 처리한 알림 ID와 시간 저장 (중복 방지)
+    private val processedNotificationTimes = mutableMapOf<Int, Long>()
+    
+    // 🔥 대기 중인 알림 (백그라운드에서 앱 실행 시)
+    private var pendingNotificationPayload: String? = null
+    
+    // 🔥 체크 간격 (밀리초)
+    private val checkInterval: Long = 500
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -81,7 +84,6 @@ class MainActivity : FlutterActivity() {
             } else {
                 Log.d("MainActivity", "⏳ 백그라운드 알림 → 대기 중...")
                 pendingNotificationPayload = payload
-                startNotificationCheck()
             }
         }
     }
@@ -106,7 +108,8 @@ class MainActivity : FlutterActivity() {
         Log.d("MainActivity", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         stopNotificationCheck()
-        processedNotifications.clear()
+        // 🔥 백그라운드 진입 시 처리 목록 초기화
+        processedNotificationTimes.clear()
     }
 
     private fun startNotificationCheck() {
@@ -122,7 +125,7 @@ class MainActivity : FlutterActivity() {
             override fun run() {
                 if (!isCheckingNotification) return
 
-                // 🔥 1. 대기 중인 알림 처리
+                // 🔥 1. 대기 중인 알림 처리 (백그라운드에서 앱 실행 시)
                 if (methodChannel != null && pendingNotificationPayload != null) {
                     val payload = pendingNotificationPayload
                     pendingNotificationPayload = null
@@ -161,16 +164,21 @@ class MainActivity : FlutterActivity() {
             return
         }
 
+        val now = System.currentTimeMillis()
+
         for (notification in activeNotifications) {
             val notificationId = notification.id
             
-            // 🔥 이미 처리한 알림은 스킵
-            if (processedNotifications.contains(notificationId)) {
+            // 🔥 우리 채널의 알림만 처리
+            if (notification.notification.channelId != "medication_channel") {
                 continue
             }
 
-            // 🔥 우리 채널의 알림만 처리
-            if (notification.notification.channelId != "medication_channel") {
+            // 🔥 이미 처리한 알림은 스킵 (단, 5초 후 재처리 가능)
+            val lastProcessedTime = processedNotificationTimes[notificationId]
+            
+            if (lastProcessedTime != null && (now - lastProcessedTime) < 5000) {
+                // 5초 이내에 처리한 알림은 무시
                 continue
             }
 
@@ -179,9 +187,14 @@ class MainActivity : FlutterActivity() {
             Log.d("MainActivity", "   ID: $notificationId")
             Log.d("MainActivity", "   Channel: ${notification.notification.channelId}")
             
-            // 🔥 알림 ID를 payload로 사용
-            processedNotifications.add(notificationId)
+            // 🔥 처리 시간 기록
+            processedNotificationTimes[notificationId] = now
             
+            // 🔥 알림 즉시 취소
+            notificationManager.cancel(notificationId)
+            Log.d("MainActivity", "   ✅ 알림 취소 완료")
+            
+            // 🔥 Flutter로 전달
             sendToFlutter(notificationId.toString())
             
             Log.d("MainActivity", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

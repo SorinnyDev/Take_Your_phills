@@ -1,25 +1,25 @@
 
-import 'dart:ui'; // 🔥 블러 효과
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
 import '../helpers/notification_helper.dart';
 import '../widgets/reminder_card.dart';
 import 'reminder_detail_screen.dart';
-import 'manual_record_screen.dart';
-import 'notification_screen.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'notification_screen_blue.dart';  // 🔥 추가
+import 'notification_screen_white.dart'; // 🔥 추가
+import 'manual_record_screen.dart';      // 🔥 추가 (ManualRecordScreen 사용)
 
 class ReminderListScreen extends StatefulWidget {
+  const ReminderListScreen({Key? key}) : super(key: key);
+
   @override
-  _ReminderListScreenState createState() => _ReminderListScreenState();
+  State<ReminderListScreen> createState() => _ReminderListScreenState();
 }
 
 class _ReminderListScreenState extends State<ReminderListScreen> {
   List<Reminder> reminders = [];
   bool isLoading = true;
-  int? _longPressedReminderId; // 🔥 롱프레스된 카드 ID 추적
-  final Map<int, GlobalKey<ReminderCardState>> _cardKeys = {}; // 🔥 카드 키 관리
 
   @override
   void initState() {
@@ -29,15 +29,16 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
   Future<void> _loadReminders() async {
     setState(() => isLoading = true);
-    final data = await DatabaseHelper.getAllReminders();
-    setState(() {
-      reminders = data;
-      isLoading = false;
-      _cardKeys.clear();
-      for (var reminder in reminders) {
-        _cardKeys[reminder.id!] = GlobalKey<ReminderCardState>();
-      }
-    });
+    try {
+      final data = await DatabaseHelper.getAllReminders();
+      setState(() {
+        reminders = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('알림 로드 실패: $e');
+      setState(() => isLoading = false);
+    }
   }
 
   void _goToDetail(BuildContext context, {Reminder? reminder}) async {
@@ -100,6 +101,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     }
 
     final firstReminder = reminders.first;
+    // 🔥 함수명 변경
     await NotificationHelper.scheduleTenSecondsNotification(firstReminder.id!);
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -123,15 +125,21 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     );
   }
 
+  // 🔥 즉시 테스트 알림 (Blue/White 랜덤)
   Future<void> _showImmediateTestNotification() async {
     if (reminders.isNotEmpty) {
       final firstReminder = reminders.first;
+      
+      // 🔥 랜덤으로 Blue/White 선택
+      final random = Random();
+      final useBlueScreen = random.nextBool();
+      
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => NotificationScreen(
-            reminderId: firstReminder.id!,
-          ),
+          builder: (context) => useBlueScreen
+              ? NotificationScreenBlue(reminderId: firstReminder.id!)
+              : NotificationScreenWhite(reminderId: firstReminder.id!),
         ),
       );
     } else {
@@ -173,8 +181,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
   // 🔥 롱프레스 시 해당 카드 ID 저장
   void _showReminderPopupMenu(BuildContext context, Reminder reminder, RenderBox cardBox) {
-    setState(() => _longPressedReminderId = reminder.id); // 🔥 롱프레스된 카드 ID 저장
-    
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final cardPosition = cardBox.localToGlobal(Offset.zero);
     final cardSize = cardBox.size;
@@ -220,10 +226,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         ),
       ],
     ).then((value) {
-      // 🔥 메뉴 닫힐 때 롱프레스 상태 해제
-      setState(() => _longPressedReminderId = null);
-      _cardKeys[reminder.id]?.currentState?.resetLongPress();
-      
       if (value == 'delete') {
         _confirmDelete(context, reminder);
       }
@@ -475,15 +477,13 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final reminder = reminders[index];
-                    final isLongPressed = _longPressedReminderId == reminder.id;
                     
                     // 🔥 Dismissible 제거, Hero + Opacity만 남김
                     return Hero(
                       tag: 'reminder_${reminder.id}',
                       child: Opacity(
-                        opacity: isLongPressed ? 1.0 : (_longPressedReminderId != null ? 0.3 : 1.0),
+                        opacity: 1.0,
                         child: ReminderCard(
-                          key: _cardKeys[reminder.id],
                           reminder: reminder,
                           onTap: () => _goToDetail(context, reminder: reminder),
                           onLongPress: (cardBox) {

@@ -1,5 +1,5 @@
-
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,7 +7,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../models/reminder.dart';
-import '../screens/notification_screen.dart';
+import '../screens/notification_screen_blue.dart';
+import '../screens/notification_screen_white.dart';
 import 'database_helper.dart';
 
 class NotificationHelper {
@@ -20,23 +21,21 @@ class NotificationHelper {
 
   static bool _isAppInForeground = true;
   static bool _isHandlingNotification = false;
+  static DateTime? _lastHandlingTime;
 
   static Future<void> initialize() async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🔔 NotificationHelper 초기화 시작');
 
-    // 🔥 timezone 초기화 (수정됨!)
     try {
-      tz_data.initializeTimeZones(); // 🔥 tz_data 사용!
+      tz_data.initializeTimeZones();
       tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
       print('✅ Timezone 초기화 완료');
     } catch (e) {
       print('⚠️  Timezone 초기화 실패: $e');
-      // 기본 로컬 타임존 사용
       tz.setLocalLocation(tz.local);
     }
 
-    // 🔥 Android 전용 - iOS에서는 실행하지 않음
     if (Platform.isAndroid) {
       try {
         await platform.invokeMethod('updateAppState', {'isInForeground': true});
@@ -63,15 +62,10 @@ class NotificationHelper {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (details) async {
-        if (_isHandlingNotification) {
-          print('⚠️  이미 알림 처리 중 - 무시');
-          return;
-        }
-
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         print('📱 알림 탭 감지 (Flutter)');
         print('   Payload: ${details.payload}');
-        print('   앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
+        print('   _isHandlingNotification: $_isHandlingNotification');
 
         if (details.payload != null) {
           final reminderId = int.tryParse(details.payload!);
@@ -83,7 +77,6 @@ class NotificationHelper {
       },
     );
 
-    // 🔥 안드로이드 알림 채널 생성
     const androidChannel = AndroidNotificationChannel(
       'medication_channel',
       '약 알림',
@@ -99,17 +92,13 @@ class NotificationHelper {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
 
-    // 🔥 네이티브 메서드 채널 설정
     platform.setMethodCallHandler(_handleNativeMethod);
-
     await _requestPermissions();
 
-    print('✅ 알림 플러그인 초기화 완료');
     print('✅ NotificationHelper 초기화 완료');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  // 🔥 앱 상태 업데이트
   static Future<void> updateAppState(bool isInForeground) async {
     _isAppInForeground = isInForeground;
 
@@ -117,7 +106,6 @@ class NotificationHelper {
     print('📱 앱 상태 변경: ${isInForeground ? "포그라운드" : "백그라운드"}');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // 🔥 Android에도 상태 전달
     try {
       await platform.invokeMethod('updateAppState', {
         'isInForeground': isInForeground,
@@ -128,18 +116,28 @@ class NotificationHelper {
   }
 
   static Future<void> _handleNativeMethod(MethodCall call) async {
-    if (_isHandlingNotification) {
-      print('⚠️  이미 알림 처리 중 - 무시');
-      return;
-    }
-
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📱 네이티브 메서드 호출: ${call.method}');
     print('   Arguments: ${call.arguments}');
-    print('   Arguments Type: ${call.arguments.runtimeType}');
+    print('   _isHandlingNotification: $_isHandlingNotification');
+
+    // 🔥 중복 호출 방지 강화
+    if (_isHandlingNotification) {
+      final now = DateTime.now();
+      if (_lastHandlingTime != null &&
+          now.difference(_lastHandlingTime!).inSeconds < 5) {
+        // 3초 → 5초로 증가
+        print(
+            '⚠️  이미 알림 처리 중 - 무시 (${now.difference(_lastHandlingTime!).inSeconds}초 경과)');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      } else {
+        print('⚠️  플래그 강제 리셋 (타임아웃)');
+        _isHandlingNotification = false;
+      }
+    }
 
     if (call.method == 'onNotificationTap') {
-      // 🔥 iOS/Android 모두 String으로 받아서 int로 변환
       final payload = call.arguments?.toString();
       print('   ✅ 백그라운드 알림 탭 - Payload: $payload');
 
@@ -148,8 +146,6 @@ class NotificationHelper {
         if (reminderId != null) {
           print('   🚀 ReminderId 파싱 성공: $reminderId');
           await _navigateToNotificationScreen(reminderId);
-        } else {
-          print('   ❌ ReminderId 파싱 실패: $payload');
         }
       }
     } else if (call.method == 'onForegroundNotification') {
@@ -164,24 +160,16 @@ class NotificationHelper {
 
       if (call.arguments is int) {
         reminderId = call.arguments as int;
-        print('   📍 ReminderId (int): $reminderId');
       } else if (call.arguments is String) {
         reminderId = int.tryParse(call.arguments as String);
-        print('   📍 ReminderId (String → int): $reminderId');
-      } else {
-        print('   ❌ 지원하지 않는 타입: ${call.arguments.runtimeType}');
-        return;
       }
 
       if (reminderId != null) {
         print('   🚀 화면 이동 시작...');
         await _navigateToNotificationScreen(reminderId);
         print('   ✅ 화면 이동 완료!');
-      } else {
-        print('   ❌ ReminderId 파싱 실패!');
       }
     } else if (call.method == 'updateAppState') {
-      // 🔥 Android 전용 - iOS에서는 무시
       if (Platform.isAndroid) {
         final args = call.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('isInForeground')) {
@@ -194,32 +182,55 @@ class NotificationHelper {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  // 🔥 화면 이동 로직 통합
+  // 🔥 화면 이동 로직 (중복 방지 강화)
   static Future<void> _navigateToNotificationScreen(int reminderId) async {
+    // 🔥 타임아웃 체크 강화
     if (_isHandlingNotification) {
-      print('⚠️  이미 화면 이동 중 - 무시');
-      return;
+      final now = DateTime.now();
+      if (_lastHandlingTime != null &&
+          now.difference(_lastHandlingTime!).inSeconds < 3) {
+        // 5초 → 3초로 감소
+        print('⚠️  이미 화면 이동 중 - 무시');
+        return;
+      } else {
+        print('⚠️  플래그 강제 리셋 (타임아웃)');
+        _isHandlingNotification = false;
+      }
     }
 
-    _isHandlingNotification = true;
-    print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
+    try {
+      _isHandlingNotification = true;
+      _lastHandlingTime = DateTime.now(); // 🔥 시간 기록
+      print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
 
-    if (navigatorKey.currentState != null) {
-      await navigatorKey.currentState!.push(
-        MaterialPageRoute(
-          builder: (context) => NotificationScreen(reminderId: reminderId),
-        ),
-      );
-      print('   ✅ 화면 이동 완료!');
-    } else {
-      print('   ❌ navigatorKey.currentState가 null입니다!');
+      if (navigatorKey.currentState != null) {
+        // 🔥 랜덤으로 Blue/White 화면 선택
+        final random = Random();
+        final useBlueScreen = random.nextBool();
+
+        print('   🎨 화면 선택: ${useBlueScreen ? "Blue" : "White"}');
+
+        await navigatorKey.currentState!.push(
+          MaterialPageRoute(
+            builder: (context) => useBlueScreen
+                ? NotificationScreenBlue(reminderId: reminderId)
+                : NotificationScreenWhite(reminderId: reminderId),
+          ),
+        );
+        print('   ✅ 화면 이동 완료!');
+      } else {
+        print('   ❌ navigatorKey.currentState가 null입니다!');
+      }
+    } catch (e) {
+      print('   ❌ 화면 이동 실패: $e');
+    } finally {
+      // 🔥 finally로 확실하게 플래그 리셋
+      await Future.delayed(Duration(milliseconds: 500)); // 300ms → 500ms로 증가
+      _isHandlingNotification = false;
+      print('   🔓 플래그 리셋 완료');
     }
-
-    await Future.delayed(Duration(milliseconds: 500));
-    _isHandlingNotification = false;
   }
 
-  // 🔥 iOS 포그라운드 알림 처리
   static Future<void> onDidReceiveLocalNotification(
     int id,
     String? title,
@@ -337,7 +348,7 @@ class NotificationHelper {
 
       if (currentCount >= 3) {
         print('   ⚠️  스누즈 횟수 초과! 자동 스킵 처리');
-        
+
         // 자동 스킵 기록 저장
         await DatabaseHelper.insertMedicationRecord(
           reminderId: reminderId,
@@ -351,7 +362,7 @@ class NotificationHelper {
 
         // 다음 정규 알림 예약
         await scheduleNextNotification(reminderId);
-        
+
         print('   ✅ 자동 스킵 완료 + 다음 알림 예약');
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         return;
@@ -523,55 +534,53 @@ class NotificationHelper {
 
   // 🔥 10초 후 알림 (테스트용)
   static Future<void> scheduleTenSecondsNotification(int reminderId) async {
-    final scheduledTime = DateTime.now().add(Duration(seconds: 10));
-
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('⏰ 10초 후 알림 예약: $reminderId');
-    print('   예약 시간: $scheduledTime');
-
-    final reminder = await DatabaseHelper.getReminderById(reminderId);
-    if (reminder == null) {
-      print('❌ Reminder를 찾을 수 없습니다');
+    try {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      return;
-    }
+      print('⏰ 10초 후 알림 예약: $reminderId');
 
-    await _notifications.zonedSchedule(
-      reminderId,
-      '약 먹을 시간이에요!',
-      reminder.title,
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'medication_channel',
-          '약 알림',
-          channelDescription: '약 복용 알림',
-          importance: Importance.max,
-          priority: Priority.high,
-          fullScreenIntent: true,
-          visibility: NotificationVisibility.public,
-          // 🔥 payload를 extras에 추가
-          additionalFlags: Int32List.fromList([4]),
-          styleInformation: BigTextStyleInformation(
-            reminder.title,
-            contentTitle: '약 먹을 시간이에요!',
+      final now = tz.TZDateTime.now(tz.local);
+      final scheduledDate = now.add(Duration(seconds: 10));
+
+      print('   예약 시간: $scheduledDate');
+
+      await _notifications.zonedSchedule(
+        reminderId,
+        '약 먹을 시간이에요!',
+        '10초 테스트 알림입니다',
+        scheduledDate,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'medication_channel',
+            'Medication Reminders',
+            channelDescription: 'Notifications for medication reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+            // 🔥 sound 제거 (기본 알림음 사용)
+            enableVibration: true,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.alarm,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            // 🔥 sound 제거 (기본 알림음 사용)
+            interruptionLevel: InterruptionLevel.timeSensitive,
           ),
         ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          threadIdentifier: 'medication',
-        ),
-      ),
-      payload: reminderId.toString(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: reminderId.toString(),
+      );
 
-    print('✅ 10초 후 알림 예약 완료!');
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('✅ 10초 후 알림 예약 완료!');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 10초 후 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 
   // 🔥 새로운 알림 예약 메서드
@@ -592,21 +601,29 @@ class NotificationHelper {
     }
   }
 
-  // 🔥 테스트 알림 예약 메서드
-  static Future<void> scheduleTestNotification(Reminder reminder) async {
+  // 🔥 즉시 알림 (테스트용)
+  static Future<void> scheduleImmediateNotification(int reminderId) async {
     try {
-      final testTime = DateTime.now().add(Duration(seconds: 10));
-
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      print('⏰ 10초 후 알림 예약: ${reminder.id}');
-      print('   예약 시간: $testTime');
+      print('⚡ 즉시 알림 예약: $reminderId');
 
-      await _scheduleNotificationAt(reminder, testTime);
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
 
-      print('✅ 10초 후 알림 예약 완료!');
+      // 1초 후 알림 (즉시)
+      final immediateTime = DateTime.now().add(Duration(seconds: 1));
+      await _scheduleNotificationAt(reminder, immediateTime);
+
+      print('   ✅ 즉시 알림 예약 완료!');
+      print('   📍 예약 시간: $immediateTime');
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
-      print('❌ 테스트 알림 예약 실패: $e');
+      print('❌ 즉시 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
 
@@ -671,5 +688,56 @@ class NotificationHelper {
 
     print('✅ 알림 표시 완료!');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+
+  // 🔥 10분 후 알림 예약 함수
+  static Future<void> scheduleTenMinutesLater(int reminderId) async {
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏰ 10분 후 알림 예약: $reminderId');
+
+      final now = tz.TZDateTime.now(tz.local);
+      final scheduledDate = now.add(Duration(minutes: 10));
+
+      print('   예약 시간: $scheduledDate');
+
+      await _notifications.zonedSchedule(
+        reminderId,
+        '약 먹을 시간이에요!',
+        '10분 전에 미룬 알림입니다',
+        scheduledDate,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'medication_channel',
+            'Medication Reminders',
+            channelDescription: 'Notifications for medication reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+            // 🔥 sound 제거 (기본 알림음 사용)
+            enableVibration: true,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.alarm,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            // 🔥 sound 제거 (기본 알림음 사용)
+            interruptionLevel: InterruptionLevel.timeSensitive,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: reminderId.toString(),
+      );
+
+      print('✅ 10분 후 알림 예약 완료!');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 10분 후 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 }

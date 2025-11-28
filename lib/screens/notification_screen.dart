@@ -1,12 +1,19 @@
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🗂️ 백업용 파일 (현재 사용 안 함)
+// 
+// 현재는 notification_screen_blue.dart와 notification_screen_white.dart를 사용합니다.
+// 이 파일은 참고용으로만 보관하며, 추후 삭제 예정입니다.
+// 
+// 사용 중인 파일:
+// - lib/screens/notification_screen_blue.dart  (파란색 테마)
+// - lib/screens/notification_screen_white.dart (흰색 테마)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'dart:async';
-import 'package:vibration/vibration.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-import '../helpers/notification_helper.dart';
-import '../helpers/database_helper.dart';
 import '../models/reminder.dart';
+import '../helpers/database_helper.dart';
+import '../helpers/notification_helper.dart'; // 🔥 추가!
 
 class NotificationScreen extends StatefulWidget {
   final int reminderId;
@@ -20,445 +27,505 @@ class NotificationScreen extends StatefulWidget {
   State<NotificationScreen> createState() => _NotificationScreenState();
 }
 
-class _NotificationScreenState extends State<NotificationScreen>
-    with WidgetsBindingObserver {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  int _playCount = 0;
-  Timer? _vibrationTimer;
-  Timer? _autoSnoozeTimer;
+class _NotificationScreenState extends State<NotificationScreen> {
   Reminder? _reminder;
   bool _isLoading = true;
-  bool _isActionTaken = false; // 🔥 사용자가 버튼을 눌렀는지 추적
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _loadReminder();
-    _startAlertSound();
-    _startAutoSnoozeTimer();
-  }
-
-  @override
-  void dispose() {
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🗑️  NotificationScreen dispose 호출');
     
-    // 🔥 사용자가 아무 버튼도 안 눌렀으면 자동 스누즈
-    if (!_isActionTaken) {
-      print('   ⚠️  사용자 액션 없음 → 자동 스누즈 예약');
-      NotificationHelper.scheduleSnooze(widget.reminderId);
-      
-      // 🔥 Toast는 비동기로 표시 (dispose 후에도 작동)
-      Future.delayed(Duration.zero, () {
-        Fluttertoast.showToast(
-          msg: '⏰ 자동 스누즈 (10분 후 다시 알림)',
-          toastLength: Toast.LENGTH_LONG,
-        );
-      });
-    } else {
-      print('   ✅ 사용자가 액션을 취했음 (복용/스누즈/건너뛰기)');
-    }
-
-    _autoSnoozeTimer?.cancel();
-    _stopAlertSound();
-    WidgetsBinding.instance.removeObserver(this);
-    
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    super.dispose();
-  }
-
-  // 🔥 5분 후 자동 스누즈 (백업용)
-  void _startAutoSnoozeTimer() {
-    _autoSnoozeTimer = Timer(Duration(minutes: 5), () async {
-      if (!_isActionTaken && mounted) {
-        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        print('⏰ 5분 타이머 발동 → 자동 스누즈');
-        
-        _isActionTaken = true; // 🔥 중복 방지
-        await NotificationHelper.scheduleSnooze(widget.reminderId);
-        
-        if (mounted) {
-          Navigator.of(context).pop();
-          Fluttertoast.showToast(
-            msg: '⏰ 자동 스누즈 (10분 후 다시 알림)',
-            toastLength: Toast.LENGTH_LONG,
-          );
-        }
-        
-        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      }
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    
-    if (state == AppLifecycleState.paused) {
-      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      print('⏸️  알림 화면 백그라운드 진입');
-      print('   → 자동 스누즈 타이머 계속 실행 중...');
-      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    } else if (state == AppLifecycleState.resumed) {
-      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      print('▶️  알림 화면 포그라운드 복귀');
-      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    }
+    // 🔥 화면 진입 시 알림 취소
+    NotificationHelper.cancelNotification(widget.reminderId);
   }
 
   Future<void> _loadReminder() async {
-    final reminder = await DatabaseHelper.getReminderById(widget.reminderId);
-    setState(() {
-      _reminder = reminder;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _startVibration() async {
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(
-        pattern: [0, 500, 200, 500],
-        repeat: 0,
-      );
-    }
-  }
-
-  void _stopVibration() {
-    Vibration.cancel();
-  }
-
-  Future<void> _startAlertSound() async {
     try {
-      _isPlaying = true;
-      _playCount = 0;
+      final allReminders = await DatabaseHelper.getAllReminders();
 
-      await _startVibration();
+      if (allReminders.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
 
-      _vibrationTimer = Timer.periodic(Duration(seconds: 3), (timer) async {
-        if (_playCount < 10 && _isPlaying) {
-          await _startVibration();
-          _playCount++;
-        } else {
-          timer.cancel();
-          _stopVibration();
-        }
-      });
-
-      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      await _audioPlayer.play(AssetSource('sounds/alarm.mp3'));
-      print('🔔 알림 소리 + 진동 시작');
-    } catch (e) {
-      print('❌ 알림 소리 재생 실패: $e');
-    }
-  }
-
-  void _stopAlertSound() {
-    _isPlaying = false;
-    _audioPlayer.stop();
-    _stopVibration();
-    _vibrationTimer?.cancel();
-    print('🔕 알림 소리 + 진동 중지');
-  }
-
-  Future<void> _onTakePressed() async {
-    _isActionTaken = true; // 🔥 액션 플래그 설정
-    _autoSnoozeTimer?.cancel();
-    _stopAlertSound();
-
-    await NotificationHelper.markAsTaken(widget.reminderId);
-
-    if (mounted) {
-      Navigator.of(context).pop();
-      Fluttertoast.showToast(
-        msg: '✅ 복용 완료!',
-        toastLength: Toast.LENGTH_SHORT,
+      Reminder? targetReminder = allReminders.firstWhere(
+        (r) => r.id == widget.reminderId,
+        orElse: () => allReminders.first,
       );
+
+      setState(() {
+        _reminder = targetReminder;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('알림 로드 실패: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _onSnoozePressed() async {
+  String _getFormattedTime() {
+    if (_reminder == null) return '';
+    
+    final hour = _reminder!.hour.toString().padLeft(2, '0');
+    final minute = _reminder!.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  // 🔥 2시간 후 리마인더 알림 예약
+  Future<void> _scheduleReminderNotification() async {
     if (_reminder == null) return;
 
-    final currentCount = _reminder!.currentSnoozeCount;
-
-    if (currentCount >= 2) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('⚠️ 마지막 스누즈'),
-          content: Text(
-            '이미 2번 스누즈했습니다.\n'
-            '한 번 더 스누즈하면 자동으로 건너뛰기 처리됩니다.\n\n'
-            '그래도 스누즈하시겠습니까?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('취소'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('스누즈', style: TextStyle(color: Colors.orange)),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true) return;
-    }
-
-    _isActionTaken = true; // 🔥 액션 플래그 설정
-    _autoSnoozeTimer?.cancel();
-    _stopAlertSound();
-
-    await NotificationHelper.scheduleSnooze(widget.reminderId);
-
-    if (mounted) {
-      Navigator.of(context).pop();
-      Fluttertoast.showToast(
-        msg: '⏰ 10분 후 다시 알림',
-        toastLength: Toast.LENGTH_SHORT,
-      );
-    }
-  }
-
-  Future<void> _onSkipPressed() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('⚠️ 건너뛰기'),
-        content: Text('이번 복용을 건너뛰시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('건너뛰기', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final reminderTime = DateTime.now().add(Duration(hours: 2));
+    
+    await NotificationHelper.scheduleNotification(
+      id: _reminder!.id! + 10000, // 리마인더용 별도 ID
+      title: '약 복용 확인',
+      body: '${_reminder!.title} - 복용하셨나요?',
+      scheduledTime: reminderTime,
+      payload: _reminder!.id.toString(),
     );
 
-    if (confirmed != true) return;
+    print('🔔 2시간 후 리마인더 예약: ${reminderTime.toString()}');
+  }
 
-    _isActionTaken = true; // 🔥 액션 플래그 설정
-    _autoSnoozeTimer?.cancel();
-    _stopAlertSound();
+  // 🔥 10초 후 테스트 알림 예약
+  Future<void> _scheduleTestNotification() async {
+    if (_reminder == null) return;
 
-    await NotificationHelper.markAsSkipped(widget.reminderId);
+    final testTime = DateTime.now().add(Duration(seconds: 10));
+    
+    await NotificationHelper.scheduleNotification(
+      id: _reminder!.id! + 20000, // 테스트용 별도 ID
+      title: '테스트 알림',
+      body: '${_reminder!.title} - 10초 후 테스트',
+      scheduledTime: testTime,
+      payload: _reminder!.id.toString(),
+    );
 
-    if (mounted) {
-      Navigator.of(context).pop();
-      Fluttertoast.showToast(
-        msg: '⏭️ 건너뛰기 완료',
-        toastLength: Toast.LENGTH_SHORT,
-      );
-    }
+    print('🔔 10초 후 테스트 알림 예약: ${testTime.toString()}');
   }
 
   @override
   Widget build(BuildContext context) {
+    // 로딩 중
     if (_isLoading) {
       return Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_reminder == null) {
-      return Scaffold(
+        backgroundColor: Color(0xFF1C2D5A),
         body: Center(
-          child: Text('알림을 찾을 수 없습니다'),
+          child: CircularProgressIndicator(color: Colors.white),
         ),
       );
     }
 
-    return WillPopScope(
-      onWillPop: () async {
-        _stopAlertSound();
-        // 🔥 뒤로가기 버튼도 자동 스누즈 처리
-        if (!_isActionTaken) {
-          _isActionTaken = true;
-          await NotificationHelper.scheduleSnooze(widget.reminderId);
-          Fluttertoast.showToast(
-            msg: '⏰ 자동 스누즈 (10분 후 다시 알림)',
-            toastLength: Toast.LENGTH_LONG,
-          );
-        }
-        return true;
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
+    // 알림 데이터 없음
+    if (_reminder == null) {
+      return Scaffold(
+        backgroundColor: Color(0xFF1C2D5A),
         body: SafeArea(
-          child: Column(
-            children: [
-              // 상단 닫기 버튼
-              Align(
-                alignment: Alignment.topRight,
-                child: IconButton(
-                  icon: Icon(Icons.close, size: 32),
-                  onPressed: () {
-                    _stopAlertSound();
-                    if (!_isActionTaken) {
-                      _isActionTaken = true;
-                      NotificationHelper.scheduleSnooze(widget.reminderId);
-                      Fluttertoast.showToast(
-                        msg: '⏰ 자동 스누즈 (10분 후 다시 알림)',
-                        toastLength: Toast.LENGTH_LONG,
-                      );
-                    }
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ),
-
-              Spacer(),
-
-              // 알림 아이콘
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.medication,
-                  size: 60,
-                  color: Colors.blue,
-                ),
-              ),
-
-              SizedBox(height: 32),
-
-              // 제목
-              Text(
-                '💊 약 먹을 시간이에요!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              SizedBox(height: 16),
-
-              // 약 이름
-              Text(
-                _reminder!.title,
-                style: TextStyle(
-                  fontSize: 20,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-
-              SizedBox(height: 8),
-
-              // 스누즈 카운트 표시
-              if (_reminder!.currentSnoozeCount > 0)
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 80, color: Colors.white70),
+                SizedBox(height: 20),
+                Text(
+                  '알림 데이터를 찾을 수 없습니다',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '⏰ 스누즈 ${_reminder!.currentSnoozeCount}/3',
-                    style: TextStyle(
-                      color: Colors.orange.shade700,
-                      fontWeight: FontWeight.bold,
+                ),
+                SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF1C2D5A),
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
+                  child: Text('돌아가기'),
                 ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
-              Spacer(),
-
-              // 버튼들
-              Padding(
-                padding: EdgeInsets.all(24),
+    // 🔥 정상 화면
+    return Scaffold(
+      backgroundColor: Color(0xFF1C2D5A),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
+            ),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
                   children: [
-                    // 복용 완료 버튼
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _onTakePressed,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          '복용 완료',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                    SizedBox(height: 24),
+
+                    // 알림 아이콘
+                    Container(
+                      padding: EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.medication,
+                        size: 80,
+                        color: Colors.white,
                       ),
                     ),
 
-                    SizedBox(height: 12),
+                    SizedBox(height: 32),
 
-                    // 10분 후 다시 알림 버튼
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton(
-                        onPressed: _onSnoozePressed,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue,
-                          side: BorderSide(color: Colors.blue, width: 2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                    // 제목
+                    Text(
+                      '약 먹을 시간이에요!',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // 약 이름
+                    Container(
+                      margin: EdgeInsets.symmetric(horizontal: 20),
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _reminder!.title,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
-                        child: Text(
-                          '10분 후 다시 알림',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
 
-                    SizedBox(height: 12),
+                    SizedBox(height: 20),
 
-                    // 건너뛰기 버튼
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton(
-                        onPressed: _onSkipPressed,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.grey,
-                          side: BorderSide(color: Colors.grey, width: 2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          '건너뛰기',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    // 시간
+                    Text(
+                      _getFormattedTime(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.white70,
                       ),
                     ),
+
+                    SizedBox(height: 20),
+
+                    Spacer(),
+
+                    // 버튼들
+                    Column(
+                      children: [
+                        // 복용 완료 버튼
+                        SizedBox(
+                          width: double.infinity,
+                          height: 60,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              // 🔥 복용 완료 처리
+                              await NotificationHelper.markAsTaken(_reminder!.id!);
+                              
+                              if (mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('복용 완료! 다음 스케줄에 알려드릴게요'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Color(0xFF1C2D5A),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle, size: 28),
+                                SizedBox(width: 12),
+                                Text(
+                                  '복용 완료',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 12),
+
+                        // 10분 후 & 내일 다시 버튼
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 56,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    // 🔥 10분 후 알림
+                                    await NotificationHelper.snoozeNotification(
+                                      _reminder!.id!,
+                                      10,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('10분 후 다시 알려드릴게요'),
+                                          backgroundColor: Colors.orange,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(color: Colors.white, width: 2),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.access_time, size: 20),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '10분 후',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(width: 12),
+
+                            // 내일 다시 알림 버튼
+                            Expanded(
+                              child: SizedBox(
+                                height: 56,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    // 🔥 내일 같은 시간 알림
+                                    await NotificationHelper.scheduleNextDayNotification(
+                                      _reminder!.id!,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('내일 같은 시간에 알려드릴게요'),
+                                          backgroundColor: Colors.blue,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                        color: Colors.white.withOpacity(0.7),
+                                        width: 2),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.calendar_today, size: 20),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '내일 다시',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // 🔥 테스트용 버튼들 (앱 배포 시 삭제)
+                        Row(
+                          children: [
+                            // 10초 후 알림 테스트 버튼
+                            Expanded(
+                              child: SizedBox(
+                                height: 56,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    await _scheduleTestNotification();
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('테스트: 10초 후 알림 예약됨'),
+                                          backgroundColor: Colors.purple,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                        color: Colors.white, width: 2),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.timer, size: 20),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '10초 후 테스트',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(width: 12),
+
+                            // 즉시 알림 테스트 버튼
+                            Expanded(
+                              child: SizedBox(
+                                height: 56,
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    print('테스트: 즉시 알림');
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('테스트: 즉시 알림'),
+                                        backgroundColor: Colors.green,
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                        color: Colors.white.withOpacity(0.7),
+                                        width: 2),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.flash_on, size: 20),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '즉시 테스트',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // 닫기 버튼 (2시간 후 리마인더 예약)
+                        TextButton(
+                          onPressed: () async {
+                            await _scheduleReminderNotification();
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('2시간 후 다시 확인할게요'),
+                                  backgroundColor: Colors.grey[700],
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(
+                            '닫기 (나중에 확인)',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 20),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
