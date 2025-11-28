@@ -740,4 +740,125 @@ class NotificationHelper {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
+
+  // 🔥 추가 필요한 메서드들
+
+  /// 테스트용 알림 (10초 후)
+  static Future<void> scheduleTestNotification(
+    int reminderId,
+    String title,
+    int delaySeconds,
+  ) async {
+    final scheduledDate = DateTime.now().add(Duration(seconds: delaySeconds));
+    
+    await _notifications.zonedSchedule(
+      reminderId + 10000, // 테스트 알림용 고유 ID
+      '테스트 알림',
+      '$title - $delaySeconds초 후 알림',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'test_channel',
+          'Test Notifications',
+          channelDescription: 'Test notification channel',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          sound: 'alarm_sound.wav',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: reminderId.toString(),
+    );
+    
+    print('✅ 테스트 알림 예약: ${scheduledDate.toString()}');
+  }
+
+  /// 리마인더 알림 (2시간 후)
+  static Future<void> scheduleReminderNotification(
+    int reminderId,
+    String title,
+    int delayMinutes,
+  ) async {
+    final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
+    
+    await _notifications.zonedSchedule(
+      reminderId + 20000, // 리마인더용 고유 ID
+      '약 복용 확인',
+      '$title - 복용하셨나요?',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reminder_channel',
+          'Reminder Notifications',
+          channelDescription: 'Reminder notification channel',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          sound: 'alarm_sound.wav',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: reminderId.toString(),
+    );
+    
+    print('✅ 리마인더 알림 예약: ${scheduledDate.toString()}');
+  }
+
+  /// 스누즈 알림 (10분 후)
+  static Future<void> snoozeNotification(
+    int reminderId,
+    int delayMinutes,
+  ) async {
+    final reminder = await DatabaseHelper.getReminderById(reminderId);
+    if (reminder == null) return;
+    
+    final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
+    
+    await _notifications.zonedSchedule(
+      reminderId + 30000, // 스누즈용 고유 ID
+      '약 먹을 시간이에요!',
+      '${reminder.title} - 다시 알려드립니다',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'snooze_channel',
+          'Snooze Notifications',
+          channelDescription: 'Snooze notification channel',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          sound: 'alarm_sound.wav',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: reminderId.toString(),
+    );
+    
+    print('✅ 스누즈 알림 예약: ${scheduledDate.toString()}');
+  }
 }
