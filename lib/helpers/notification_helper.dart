@@ -750,7 +750,7 @@ class NotificationHelper {
     int delaySeconds,
   ) async {
     final scheduledDate = DateTime.now().add(Duration(seconds: delaySeconds));
-    
+
     await _notifications.zonedSchedule(
       reminderId + 10000, // 테스트 알림용 고유 ID
       '테스트 알림',
@@ -778,7 +778,7 @@ class NotificationHelper {
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: reminderId.toString(),
     );
-    
+
     print('✅ 테스트 알림 예약: ${scheduledDate.toString()}');
   }
 
@@ -789,7 +789,7 @@ class NotificationHelper {
     int delayMinutes,
   ) async {
     final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
-    
+
     await _notifications.zonedSchedule(
       reminderId + 20000, // 리마인더용 고유 ID
       '약 복용 확인',
@@ -817,7 +817,7 @@ class NotificationHelper {
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: reminderId.toString(),
     );
-    
+
     print('✅ 리마인더 알림 예약: ${scheduledDate.toString()}');
   }
 
@@ -828,9 +828,9 @@ class NotificationHelper {
   ) async {
     final reminder = await DatabaseHelper.getReminderById(reminderId);
     if (reminder == null) return;
-    
+
     final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
-    
+
     await _notifications.zonedSchedule(
       reminderId + 30000, // 스누즈용 고유 ID
       '약 먹을 시간이에요!',
@@ -858,7 +858,7 @@ class NotificationHelper {
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: reminderId.toString(),
     );
-    
+
     print('✅ 스누즈 알림 예약: ${scheduledDate.toString()}');
   }
 }

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
@@ -17,8 +16,9 @@ class NotificationScreenBlue extends StatefulWidget {
 }
 
 class _NotificationScreenBlueState extends State<NotificationScreenBlue>
-    with SingleTickerProviderStateMixin { // 🔥 애니메이션 믹스인 추가
-  
+    with SingleTickerProviderStateMixin {
+  // 🔥 애니메이션 믹스인 추가
+
   Reminder? _reminder;
   bool _isLoading = true;
 
@@ -30,13 +30,13 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
   @override
   void initState() {
     super.initState();
-    
+
     // 🔥 애니메이션 초기화
     _fadeController = AnimationController(
       duration: Duration(milliseconds: 600),
       vsync: this,
     );
-    
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -44,7 +44,7 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
       parent: _fadeController,
       curve: Curves.easeOut,
     ));
-    
+
     _slideAnimation = Tween<Offset>(
       begin: Offset(0, 0.1),
       end: Offset.zero,
@@ -52,7 +52,7 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
       parent: _fadeController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _loadReminder();
   }
 
@@ -69,7 +69,7 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
         _reminder = reminder;
         _isLoading = false;
       });
-      
+
       // 🔥 데이터 로딩 완료 후 애니메이션 시작
       if (reminder != null) {
         _fadeController.forward();
@@ -156,9 +156,11 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
     return Scaffold(
       backgroundColor: Color(0xFF1C2D5A),
       body: SafeArea(
-        child: FadeTransition( // 🔥 페이드 애니메이션
+        child: FadeTransition(
+          // 🔥 페이드 애니메이션
           opacity: _fadeAnimation,
-          child: SlideTransition( // 🔥 슬라이드 애니메이션
+          child: SlideTransition(
+            // 🔥 슬라이드 애니메이션
             position: _slideAnimation,
             child: SingleChildScrollView(
               child: ConstrainedBox(
@@ -179,7 +181,8 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                           scale: Tween<double>(begin: 0.5, end: 1.0).animate(
                             CurvedAnimation(
                               parent: _fadeController,
-                              curve: Interval(0.0, 0.5, curve: Curves.elasticOut),
+                              curve:
+                                  Interval(0.0, 0.5, curve: Curves.elasticOut),
                             ),
                           ),
                           child: Container(
@@ -214,7 +217,8 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                         // 약 이름
                         Container(
                           margin: EdgeInsets.symmetric(horizontal: 20),
-                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
@@ -256,8 +260,9 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                               height: 60,
                               child: ElevatedButton(
                                 onPressed: () async {
-                                  await NotificationHelper.markAsTaken(_reminder!.id!);
-                                  
+                                  await NotificationHelper.markAsTaken(
+                                      _reminder!.id!);
+
                                   if (mounted) {
                                     Navigator.pop(context);
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -304,14 +309,16 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                                     height: 56,
                                     child: OutlinedButton(
                                       onPressed: () async {
-                                        await NotificationHelper.snoozeNotification(
+                                        await NotificationHelper
+                                            .snoozeNotification(
                                           _reminder!.id!,
                                           10,
                                         );
-                                        
+
                                         if (mounted) {
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             SnackBar(
                                               content: Text('10분 후 다시 알려드릴게요'),
                                               backgroundColor: Colors.orange,
@@ -322,13 +329,16 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                                       },
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
-                                        side: BorderSide(color: Colors.white, width: 2),
+                                        side: BorderSide(
+                                            color: Colors.white, width: 2),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
                                         ),
                                       ),
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.access_time, size: 20),
                                           SizedBox(height: 4),
@@ -350,23 +360,27 @@ class _NotificationScreenBlueState extends State<NotificationScreenBlue>
                                     height: 56,
                                     child: OutlinedButton(
                                       onPressed: () async {
-                                        await NotificationHelper.scheduleNextNotification(
+                                        await NotificationHelper
+                                            .scheduleNextNotification(
                                           _reminder!.id!,
                                         );
-                                        
+
                                         if (mounted) {
                                           Navigator.pop(context);
                                         }
                                       },
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
-                                        side: BorderSide(color: Colors.white, width: 2),
+                                        side: BorderSide(
+                                            color: Colors.white, width: 2),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
                                         ),
                                       ),
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.calendar_today, size: 20),
                                           SizedBox(height: 4),

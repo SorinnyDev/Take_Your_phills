@@ -1,4 +1,3 @@
-
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
@@ -6,9 +5,9 @@ import '../helpers/database_helper.dart';
 import '../helpers/notification_helper.dart';
 import '../widgets/reminder_card.dart';
 import 'reminder_detail_screen.dart';
-import 'notification_screen_blue.dart';  // 🔥 추가
+import 'notification_screen_blue.dart'; // 🔥 추가
 import 'notification_screen_white.dart'; // 🔥 추가
-import 'manual_record_screen.dart';      // 🔥 추가 (ManualRecordScreen 사용)
+import 'manual_record_screen.dart'; // 🔥 추가 (ManualRecordScreen 사용)
 
 class ReminderListScreen extends StatefulWidget {
   const ReminderListScreen({Key? key}) : super(key: key);
@@ -48,7 +47,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         builder: (context) => ReminderDetailScreen(reminder: reminder),
       ),
     );
-    
+
     // 🔥 result 값에 관계없이 무조건 새로고침
     _loadReminders();
   }
@@ -56,7 +55,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   Future<void> _deleteReminder(Reminder reminder) async {
     await DatabaseHelper.deleteReminder(reminder.id!);
     _loadReminders();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -103,7 +102,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     final firstReminder = reminders.first;
     // 🔥 함수명 변경
     await NotificationHelper.scheduleTenSecondsNotification(firstReminder.id!);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -129,11 +128,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   Future<void> _showImmediateTestNotification() async {
     if (reminders.isNotEmpty) {
       final firstReminder = reminders.first;
-      
+
       // 🔥 랜덤으로 Blue/White 선택
       final random = Random();
       final useBlueScreen = random.nextBool();
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -180,16 +179,18 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   }
 
   // 🔥 롱프레스 시 해당 카드 ID 저장
-  void _showReminderPopupMenu(BuildContext context, Reminder reminder, RenderBox cardBox) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  void _showReminderPopupMenu(
+      BuildContext context, Reminder reminder, RenderBox cardBox) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
     final cardPosition = cardBox.localToGlobal(Offset.zero);
     final cardSize = cardBox.size;
-    
+
     final menuPosition = Offset(
       cardPosition.dx + cardSize.width + 8,
       cardPosition.dy + cardSize.height / 2,
     );
-    
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -312,9 +313,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               ),
             ),
           ),
-          
           SizedBox(width: 12),
-          
           Expanded(
             flex: 3,
             child: OutlinedButton.icon(
@@ -367,7 +366,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
           ),
-          
+
           Padding(
             padding: EdgeInsets.all(16),
             child: Column(
@@ -382,9 +381,9 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                
+
                 SizedBox(height: 12),
-                
+
                 // 시간 스켈레톤
                 Container(
                   width: 100,
@@ -446,7 +445,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Icon(Icons.medication, color: Colors.white70, size: 16),
+                            Icon(Icons.medication,
+                                color: Colors.white70, size: 16),
                             SizedBox(width: 6),
                             Text(
                               '총 ${reminders.length}개의 알림',
@@ -464,11 +464,9 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               ),
             ),
           ),
-
           SliverToBoxAdapter(
             child: _buildActionButtons(),
           ),
-
           if (isLoading)
             SliverPadding(
               padding: EdgeInsets.all(16),
@@ -485,7 +483,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 ),
               ),
             )
-          
           else if (reminders.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -526,7 +523,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 ),
               ),
             )
-          
           else
             SliverPadding(
               padding: EdgeInsets.all(16),
@@ -540,7 +536,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final reminder = reminders[index];
-                    
+
                     // 🔥 Dismissible 제거, Hero + Opacity만 남김
                     return Hero(
                       tag: 'reminder_${reminder.id}',
@@ -593,9 +589,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               ),
             ),
           ),
-          
           SizedBox(height: 12),
-          
           FloatingActionButton.extended(
             onPressed: _scheduleTenSecondNotification,
             backgroundColor: Colors.orange,

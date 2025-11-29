@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../models/medication_record.dart';
@@ -14,7 +13,7 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
   List<Reminder> _reminders = [];
   Reminder? _selectedReminder;
   bool _isLoading = true;
-  
+
   // 🔥 현재 시간으로 고정
   final DateTime _takenTime = DateTime.now();
 
@@ -35,13 +34,13 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
   // 🔥 가까운 스케줄 찾기
   List<Map<String, dynamic>> _getNearbySchedules() {
     if (_selectedReminder == null) return [];
-    
+
     final schedules = _selectedReminder!.calculateDailySchedules(_takenTime);
     final results = <Map<String, dynamic>>[];
-    
+
     DateTime? before;
     DateTime? after;
-    
+
     for (var schedule in schedules) {
       if (schedule.isBefore(_takenTime)) {
         before = schedule;
@@ -50,7 +49,7 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
         break;
       }
     }
-    
+
     if (before != null) {
       final diff = _takenTime.difference(before).inMinutes;
       results.add({
@@ -60,7 +59,7 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
         'type': 'before',
       });
     }
-    
+
     if (after != null) {
       final diff = after.difference(_takenTime).inMinutes;
       results.add({
@@ -70,12 +69,13 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
         'type': 'after',
       });
     }
-    
+
     return results;
   }
 
   String _formatTime(DateTime time) {
-    final hour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final hour =
+        time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final amPm = time.hour >= 12 ? '오후' : '오전';
     return '$amPm $hour:${time.minute.toString().padLeft(2, '0')}';
   }
@@ -97,7 +97,7 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
 
     if (mounted) {
       Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${_selectedReminder!.title} 복용 기록 완료!'),
@@ -247,7 +247,8 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                       color: isSelected ? Color(0xFF1C2D5A) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? Color(0xFF1C2D5A) : Colors.grey[300]!,
+                        color:
+                            isSelected ? Color(0xFF1C2D5A) : Colors.grey[300]!,
                         width: 2,
                       ),
                       boxShadow: isSelected
@@ -272,7 +273,8 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                           ),
                           child: Icon(
                             Icons.medication,
-                            color: isSelected ? Colors.white : Color(0xFF1C2D5A),
+                            color:
+                                isSelected ? Colors.white : Color(0xFF1C2D5A),
                             size: 28,
                           ),
                         ),
@@ -286,7 +288,9 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: isSelected ? Colors.white : Colors.grey[800],
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.grey[800],
                                 ),
                               ),
                               SizedBox(height: 4),
@@ -294,14 +298,18 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                                 '${reminder.amPm} ${reminder.hour}:${reminder.minute.toString().padLeft(2, '0')} 시작',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: isSelected ? Colors.white70 : Colors.grey[600],
+                                  color: isSelected
+                                      ? Colors.white70
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Icon(
-                          isSelected ? Icons.check_circle : Icons.circle_outlined,
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
                           color: isSelected ? Colors.white : Colors.grey[400],
                           size: 28,
                         ),
@@ -325,7 +333,8 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                            Icon(Icons.info_outline,
+                                color: Colors.blue[700], size: 20),
                             SizedBox(width: 8),
                             Text(
                               '어떤 알림의 약인가요?',
@@ -353,11 +362,13 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.access_time, color: Colors.blue[700], size: 18),
+                                    Icon(Icons.access_time,
+                                        color: Colors.blue[700], size: 18),
                                     SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             schedule['label'],
@@ -376,7 +387,8 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
                                         ],
                                       ),
                                     ),
-                                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                                    Icon(Icons.arrow_forward_ios,
+                                        size: 16, color: Colors.grey),
                                   ],
                                 ),
                               ),
