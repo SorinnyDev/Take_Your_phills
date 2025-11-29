@@ -764,13 +764,13 @@ class NotificationHelper {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+          sound: RawResourceAndroidNotificationSound('alarm03'), // 🔥 수정
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          sound: 'alarm_sound.wav',
+          sound: 'alarm03.mp3', // 🔥 수정
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -803,13 +803,13 @@ class NotificationHelper {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+          sound: RawResourceAndroidNotificationSound('alarm03'), // 🔥 수정
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          sound: 'alarm_sound.wav',
+          sound: 'alarm03.mp3', // 🔥 수정
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -844,13 +844,13 @@ class NotificationHelper {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          sound: RawResourceAndroidNotificationSound('alarm_sound'),
+          sound: RawResourceAndroidNotificationSound('alarm03'), // 🔥 수정
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          sound: 'alarm_sound.wav',
+          sound: 'alarm03.mp3', // 🔥 수정
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

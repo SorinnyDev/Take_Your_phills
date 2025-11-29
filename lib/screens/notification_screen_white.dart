@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 import '../helpers/database_helper.dart';
 import '../helpers/notification_helper.dart';
+import '../helpers/notification_action_helper.dart';
 
 class NotificationScreenWhite extends StatefulWidget {
   final int reminderId;
@@ -18,12 +19,9 @@ class NotificationScreenWhite extends StatefulWidget {
 
 class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
     with SingleTickerProviderStateMixin {
-  // 🔥 애니메이션 믹스인 추가
-
   Reminder? _reminder;
   bool _isLoading = true;
 
-  // 🔥 애니메이션 컨트롤러
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -32,9 +30,8 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
   void initState() {
     super.initState();
 
-    // 🔥 애니메이션 초기화
     _fadeController = AnimationController(
-      duration: Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
@@ -47,7 +44,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
     ));
 
     _slideAnimation = Tween<Offset>(
-      begin: Offset(0, 0.1),
+      begin: const Offset(0, 0.1),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _fadeController,
@@ -59,7 +56,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
 
   @override
   void dispose() {
-    _fadeController.dispose(); // 🔥 컨트롤러 해제
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -71,7 +68,6 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
         _isLoading = false;
       });
 
-      // 🔥 데이터 로딩 완료 후 애니메이션 시작
       if (reminder != null) {
         _fadeController.forward();
       }
@@ -86,35 +82,17 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
     return '${_reminder!.amPm} ${_reminder!.hour}:${_reminder!.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _scheduleTestNotification() async {
-    await NotificationHelper.scheduleTestNotification(
-      _reminder!.id!,
-      _reminder!.title,
-      10,
-    );
-  }
-
-  Future<void> _scheduleReminderNotification() async {
-    await NotificationHelper.scheduleReminderNotification(
-      _reminder!.id!,
-      _reminder!.title,
-      120,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // 로딩 중
     if (_isLoading) {
       return Scaffold(
         backgroundColor: Colors.white,
-        body: Center(
+        body: const Center(
           child: CircularProgressIndicator(color: Color(0xFF1C2D5A)),
         ),
       );
     }
 
-    // 알림 데이터 없음
     if (_reminder == null) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -124,7 +102,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.error_outline, size: 80, color: Colors.grey[400]),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 Text(
                   '알림 데이터를 찾을 수 없습니다',
                   style: TextStyle(
@@ -133,18 +111,19 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(height: 40),
+                const SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF1C2D5A),
+                    backgroundColor: const Color(0xFF1C2D5A),
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text('돌아가기'),
+                  child: const Text('돌아가기'),
                 ),
               ],
             ),
@@ -153,15 +132,12 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
       );
     }
 
-    // 🔥 정상 화면 (애니메이션 적용)
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: FadeTransition(
-          // 🔥 페이드 애니메이션
           opacity: _fadeAnimation,
           child: SlideTransition(
-            // 🔥 슬라이드 애니메이션
             position: _slideAnimation,
             child: SingleChildScrollView(
               child: ConstrainedBox(
@@ -172,27 +148,28 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                 ),
                 child: IntrinsicHeight(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 20),
                     child: Column(
                       children: [
-                        SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                        // 🔥 알림 아이콘 (스케일 애니메이션 추가)
+                        // 알림 아이콘
                         ScaleTransition(
                           scale: Tween<double>(begin: 0.5, end: 1.0).animate(
                             CurvedAnimation(
                               parent: _fadeController,
-                              curve:
-                                  Interval(0.0, 0.5, curve: Curves.elasticOut),
+                              curve: const Interval(0.0, 0.5,
+                                  curve: Curves.elasticOut),
                             ),
                           ),
                           child: Container(
-                            padding: EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: Color(0xFF1C2D5A).withOpacity(0.1),
+                              color: const Color(0xFF1C2D5A).withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.medication,
                               size: 80,
                               color: Color(0xFF1C2D5A),
@@ -200,10 +177,10 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                           ),
                         ),
 
-                        SizedBox(height: 32),
+                        const SizedBox(height: 32),
 
                         // 제목
-                        Text(
+                        const Text(
                           '약 먹을 시간이에요!',
                           style: TextStyle(
                             fontSize: 28,
@@ -213,20 +190,20 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                           textAlign: TextAlign.center,
                         ),
 
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
                         // 약 이름
                         Container(
-                          margin: EdgeInsets.symmetric(horizontal: 20),
-                          padding: EdgeInsets.symmetric(
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
                           decoration: BoxDecoration(
-                            color: Color(0xFF1C2D5A).withOpacity(0.1),
+                            color: const Color(0xFF1C2D5A).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             _reminder!.title,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF1C2D5A),
@@ -237,7 +214,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                           ),
                         ),
 
-                        SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
                         // 시간
                         Text(
@@ -248,11 +225,11 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                           ),
                         ),
 
-                        SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                        Spacer(),
+                        const Spacer(),
 
-                        // 버튼들
+                        // 🔥 버튼들 (헬퍼 사용)
                         Column(
                           children: [
                             // 복용 완료 버튼
@@ -260,30 +237,20 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                               width: double.infinity,
                               height: 60,
                               child: ElevatedButton(
-                                onPressed: () async {
-                                  await NotificationHelper.markAsTaken(
-                                      _reminder!.id!);
-
-                                  if (mounted) {
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('복용 완료! 다음 스케줄에 알려드릴게요'),
-                                        backgroundColor: Colors.green,
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
-                                },
+                                onPressed: () =>
+                                    NotificationActionHelper.handleTaken(
+                                  context,
+                                  _reminder!,
+                                ),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Color(0xFF1C2D5A),
+                                  backgroundColor: const Color(0xFF1C2D5A),
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   elevation: 0,
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.check_circle, size: 28),
@@ -300,7 +267,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                               ),
                             ),
 
-                            SizedBox(height: 12),
+                            const SizedBox(height: 12),
 
                             // 10분 후 & 내일 다시 버튼
                             Row(
@@ -309,35 +276,22 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                                   child: SizedBox(
                                     height: 56,
                                     child: OutlinedButton(
-                                      onPressed: () async {
-                                        await NotificationHelper
-                                            .snoozeNotification(
-                                          _reminder!.id!,
-                                          10,
-                                        );
-
-                                        if (mounted) {
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text('10분 후 다시 알려드릴게요'),
-                                              backgroundColor: Colors.orange,
-                                              duration: Duration(seconds: 2),
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      onPressed: () =>
+                                          NotificationActionHelper.handleSnooze(
+                                        context,
+                                        _reminder!.id!,
+                                      ),
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: Color(0xFF1C2D5A),
-                                        side: BorderSide(
+                                        foregroundColor:
+                                            const Color(0xFF1C2D5A),
+                                        side: const BorderSide(
                                             color: Color(0xFF1C2D5A), width: 2),
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(16),
                                         ),
                                       ),
-                                      child: Column(
+                                      child: const Column(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
@@ -355,32 +309,19 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                                     ),
                                   ),
                                 ),
-
-                                SizedBox(width: 12),
-
-                                // 내일 다시 알림 버튼
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: SizedBox(
                                     height: 56,
                                     child: OutlinedButton(
-                                      onPressed: () async {
-                                        await NotificationHelper.markAsSkipped(
-                                            _reminder!.id!);
-
-                                        if (mounted) {
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text('내일 같은 시간에 알려드릴게요'),
-                                              backgroundColor: Colors.blue,
-                                              duration: Duration(seconds: 2),
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      onPressed: () => NotificationActionHelper
+                                          .handleSkipToNextDay(
+                                        context,
+                                        _reminder!.id!,
+                                      ),
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: Color(0xFF1C2D5A),
+                                        foregroundColor:
+                                            const Color(0xFF1C2D5A),
                                         side: BorderSide(
                                             color: Colors.grey.withOpacity(0.7),
                                             width: 2),
@@ -389,7 +330,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                                               BorderRadius.circular(16),
                                         ),
                                       ),
-                                      child: Column(
+                                      child: const Column(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
@@ -410,20 +351,12 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                               ],
                             ),
 
-                            SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                            // 닫기 버튼 (2시간 후 리마인더 예약)
+                            // 닫기 버튼
                             TextButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('2시간 후 다시 확인할게요'),
-                                    backgroundColor: Colors.grey[700],
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
+                              onPressed: () =>
+                                  NotificationActionHelper.handleClose(context),
                               child: Text(
                                 '닫기 (나중에 확인)',
                                 style: TextStyle(
@@ -435,7 +368,7 @@ class _NotificationScreenWhiteState extends State<NotificationScreenWhite>
                           ],
                         ),
 
-                        SizedBox(height: 20),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
