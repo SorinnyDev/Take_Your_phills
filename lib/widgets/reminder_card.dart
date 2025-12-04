@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../models/reminder.dart';
 
@@ -119,9 +118,7 @@ class ReminderCardState extends State<ReminderCard>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      
                       Spacer(),
-                      
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
@@ -180,7 +177,6 @@ class ReminderCardState extends State<ReminderCard>
                             : Colors.grey[400],
                       ),
                     ),
-
                     GestureDetector(
                       onTap: () {},
                       child: Transform.scale(
@@ -189,7 +185,8 @@ class ReminderCardState extends State<ReminderCard>
                           value: widget.reminder.isEnabled,
                           onChanged: widget.onToggle,
                           activeColor: Color(0xFF1C2D5A),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                     ),

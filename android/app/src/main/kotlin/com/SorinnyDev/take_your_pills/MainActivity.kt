@@ -202,28 +202,22 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun sendToFlutter(payload: String) {
-        if (methodChannel == null) {
-            Log.e("MainActivity", "❌ MethodChannel이 null입니다!")
-            return
-        }
-
-        try {
-            val reminderId = payload.toIntOrNull()
-            if (reminderId == null) {
-                Log.e("MainActivity", "❌ Payload를 Int로 변환 실패: $payload")
-                return
+        Log.d("MainActivity", "🚀 Flutter 메서드 호출: onForegroundNotification")
+        Log.d("MainActivity", "   ReminderId: $payload")
+        
+        methodChannel?.invokeMethod("onForegroundNotification", payload, object : MethodChannel.Result {
+            override fun success(result: Any?) {
+                Log.d("MainActivity", "✅ Flutter 호출 완료!")
             }
-
-            Log.d("MainActivity", "🚀 Flutter 메서드 호출: onForegroundNotification")
-            Log.d("MainActivity", "   ReminderId: $reminderId")
-
-            methodChannel?.invokeMethod("onForegroundNotification", reminderId)
-
-            Log.d("MainActivity", "✅ Flutter 호출 완료!")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "❌ Flutter 호출 실패: ${e.message}")
-            e.printStackTrace()
-        }
+            
+            override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                Log.e("MainActivity", "❌ Flutter 호출 실패: $errorCode - $errorMessage")
+            }
+            
+            override fun notImplemented() {
+                Log.e("MainActivity", "❌ Flutter 메서드가 구현되지 않음!")
+            }
+        })
     }
 
     override fun onDestroy() {

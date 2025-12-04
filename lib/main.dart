@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -12,17 +11,30 @@ Future<void> _rescheduleAllNotifications() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // 🔥 타임존 초기화
   tz_data.initializeTimeZones();
-  
-  await NotificationHelper.initialize();
-  
-  await _rescheduleAllNotifications();
-  
+  tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 🔥 앱 시작 후 초기화
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await NotificationHelper.initialize(context);
+      await _rescheduleAllNotifications();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -47,7 +59,8 @@ class AppLifecycleWrapper extends StatefulWidget {
   State<AppLifecycleWrapper> createState() => _AppLifecycleWrapperState();
 }
 
-class _AppLifecycleWrapperState extends State<AppLifecycleWrapper> with WidgetsBindingObserver {
+class _AppLifecycleWrapperState extends State<AppLifecycleWrapper>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -63,7 +76,7 @@ class _AppLifecycleWrapperState extends State<AppLifecycleWrapper> with WidgetsB
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     switch (state) {
       case AppLifecycleState.resumed:
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
