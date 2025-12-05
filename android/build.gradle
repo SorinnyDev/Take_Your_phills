@@ -1,14 +1,8 @@
 
 buildscript {
-    ext.kotlin_version = '1.9.22'
     repositories {
         google()
         mavenCentral()
-    }
-
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.0'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
@@ -24,10 +18,11 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     
-    // 🔥 모든 플러그인에 Java 17 강제 적용
+    // 🔥 afterEvaluate는 subprojects 블록 안에서만!
     afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            android {
+        // Java 17 호환성
+        if (project.hasProperty('android')) {
+            project.android {
                 compileOptions {
                     sourceCompatibility JavaVersion.VERSION_17
                     targetCompatibility JavaVersion.VERSION_17
@@ -35,7 +30,14 @@ subprojects {
             }
         }
         
-        // 🔥 Kotlin 컴파일 옵션 강제 설정
+        // Kotlin 17 호환성
+        if (project.hasProperty('kotlin')) {
+            project.kotlin {
+                jvmToolchain(17)
+            }
+        }
+        
+        // Kotlin 컴파일 옵션
         tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
             kotlinOptions {
                 jvmTarget = '17'
