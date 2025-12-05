@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
@@ -13,6 +12,7 @@ import '../screens/notification_screen_blue.dart';
 import '../screens/notification_screen_white.dart';
 import 'database_helper.dart';
 import 'package:flutter/services.dart';
+import 'package:vibration/vibration.dart';
 
 class NotificationHelper {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -29,15 +29,20 @@ class NotificationHelper {
   static const platform =
       MethodChannel('com.sorinnydev.take_your_pills/notification');
 
-  // 🔥 진동 패턴
-  static final List<int> _vibrationPattern = [0, 500, 250, 500];
+  // 🔥 진동 패턴 (카카오톡 스타일 - 강하고 짧게 2번)
+  static final List<int> _vibrationPattern = [
+    0, // 대기 없음
+    200, // 강한 진동 200ms
+    100, // 짧은 멈춤
+    200, // 강한 진동 200ms
+  ];
 
   // 🔥 AudioPlayer 추가
   static final AudioPlayer _audioPlayer = AudioPlayer();
 
   // 🔥 반복 재생 제어 변수
   static int _currentPlayCount = 0;
-  static const int _maxPlayCount = 3; // 최대 3번 반복
+  static const int _maxPlayCount = 10; // 🔥 3번 → 10번으로 변경
   static Timer? _soundTimer;
   static StreamSubscription? _playerCompleteSubscription;
 
@@ -117,14 +122,17 @@ class NotificationHelper {
     print('📱 앱 상태 업데이트: ${isForeground ? "포그라운드" : "백그라운드"}');
   }
 
-  // 🔥 사운드 재생 메서드 (3번 반복 후 자동 정지)
+  // 🔥 사운드 재생 메서드 (10번 반복 후 자동 정지)
   static Future<void> _playNotificationSound() async {
     try {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       print('🔊 알림 사운드 재생 시작...');
 
-      // 기존 재생 중인 사운드 정지
-      await stopNotificationSound();
+      // 🔥 수정: 이미 재생 중이면 스킵
+      if (_currentPlayCount > 0) {
+        print('⚠️  이미 사운드 재생 중 - 스킵');
+        return;
+      }
 
       // 재생 횟수 초기화
       _currentPlayCount = 0;
@@ -140,7 +148,7 @@ class NotificationHelper {
     }
   }
 
-  // 🔥 사운드 반복 재생 로직 (3번 반복 후 자동 정지)
+  // 🔥 사운드 반복 재생 로직 (10번 반복 후 자동 정지)
   static Future<void> _playSoundLoop() async {
     if (_currentPlayCount >= _maxPlayCount) {
       print('🔇 최대 재생 횟수 도달 ($_maxPlayCount회) - 자동 정지');
@@ -152,6 +160,15 @@ class NotificationHelper {
     print('🔊 사운드 재생 중... ($_currentPlayCount/$_maxPlayCount)');
 
     try {
+      // 🔥 진동 추가 (카카오톡 스타일 - 강하고 짧게)
+      if (await Vibration.hasVibrator() ?? false) {
+        await Vibration.vibrate(
+          pattern: _vibrationPattern,
+          intensities: [0, 255, 0, 255], // 🔥 최대 강도 (255)
+        );
+        print('📳 진동 시작 (강도: 최대)');
+      }
+
       // 기존 리스너 제거
       await _playerCompleteSubscription?.cancel();
 
@@ -180,6 +197,9 @@ class NotificationHelper {
   // 🔥 사운드 정지 메서드
   static Future<void> stopNotificationSound() async {
     try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🔇 사운드 정지 시작...');
+
       // 타이머 취소
       _soundTimer?.cancel();
       _soundTimer = null;
@@ -191,10 +211,17 @@ class NotificationHelper {
       // 오디오 정지
       await _audioPlayer.stop();
 
+      // 🔥 진동 정지
+      if (await Vibration.hasVibrator() ?? false) {
+        await Vibration.cancel();
+        print('📳 진동 정지 완료');
+      }
+
       // 재생 횟수 초기화
       _currentPlayCount = 0;
 
-      print('🔇 알림 사운드 정지 완료');
+      print('✅ 알림 사운드 정지 완료');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('❌ 알림 사운드 정지 실패: $e');
     }
@@ -220,10 +247,8 @@ class NotificationHelper {
       _lastHandlingTime = DateTime.now();
       print('   🚀 NotificationScreen으로 이동: reminderId=$reminderId');
 
-      // 🔥 포그라운드일 때만 사운드 재생 (3번 반복 후 자동 정지)
-      if (_isAppInForeground) {
-        await _playNotificationSound();
-      }
+      // 🔥 수정: 포그라운드/백그라운드 관계없이 항상 사운드 재생
+      await _playNotificationSound();
 
       if (navigatorKey.currentState != null) {
         // 🔥 랜덤으로 Blue/White 화면 선택
@@ -685,16 +710,16 @@ class NotificationHelper {
 
       print('   ⏰ 예약 시간: $tzScheduledTime');
 
-      // 🔥 Android 설정 (진동 패턴 포함)
+      // 🔥 Android 설정 (카카오톡 스타일 진동)
       final androidDetails = AndroidNotificationDetails(
         'medication_channel',
         '복약 알림',
         channelDescription: '약 복용 시간을 알려드립니다',
         importance: Importance.max,
         priority: Priority.high,
-        playSound: false, // 🔥 사운드 끄기
-        enableVibration: true, // 🔥 진동 활성화
-        vibrationPattern: Int64List.fromList(_vibrationPattern), // 🔥 진동 패턴
+        playSound: false,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList(_vibrationPattern), // 🔥 카카오톡 스타일
         fullScreenIntent: true,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
@@ -709,7 +734,7 @@ class NotificationHelper {
       const iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: false, // 🔥 사운드 끄기
+        presentSound: false,
         interruptionLevel: InterruptionLevel.timeSensitive,
       );
 
