@@ -264,4 +264,58 @@ class DatabaseHelper {
 
     return stats;
   }
+
+  // 날짜 범위로 복용 기록 조회
+  static Future<List<MedicationRecord>> getMedicationRecordsByDateRange({
+    required int reminderId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final db = await database;
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'medication_records',
+      where: 'reminderId = ? AND scheduledTime >= ? AND scheduledTime <= ?',
+      whereArgs: [
+        reminderId,
+        startDate.toIso8601String(),
+        endDate.toIso8601String(),
+      ],
+      orderBy: 'scheduledTime DESC',
+    );
+
+    return List.generate(maps.length, (i) => MedicationRecord.fromMap(maps[i]));
+  }
+
+  // 특정 스케줄 시간의 복용 기록 조회 (중복 체크용)
+  static Future<MedicationRecord?> getMedicationRecordBySchedule({
+    required int reminderId,
+    required DateTime scheduledTime,
+  }) async {
+    final db = await database;
+    
+    // 같은 날짜, 같은 시간의 기록 찾기
+    final scheduleStart = DateTime(
+      scheduledTime.year,
+      scheduledTime.month,
+      scheduledTime.day,
+      scheduledTime.hour,
+      scheduledTime.minute,
+    );
+    final scheduleEnd = scheduleStart.add(Duration(minutes: 1));
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'medication_records',
+      where: 'reminderId = ? AND scheduledTime >= ? AND scheduledTime < ?',
+      whereArgs: [
+        reminderId,
+        scheduleStart.toIso8601String(),
+        scheduleEnd.toIso8601String(),
+      ],
+      limit: 1,
+    );
+
+    if (maps.isEmpty) return null;
+    return MedicationRecord.fromMap(maps.first);
+  }
 }
