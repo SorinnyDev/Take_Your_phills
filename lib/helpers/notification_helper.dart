@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
@@ -390,10 +391,37 @@ class NotificationHelper {
     return nextTime;
   }
 
-  // 🔥 특정 시간에 알림 예약
+  // 🔥 특정 시간에 알림 예약 (통합 버전)
   static Future<void> _scheduleNotificationAt(
       Reminder reminder, DateTime scheduledTime) async {
     try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('📅 알림 예약 시작');
+      print('   ReminderId: ${reminder.id}');
+      print('   Title: ${reminder.title}');
+      print('   예약 시간: $scheduledTime');
+
+      final now = DateTime.now();
+      final difference = scheduledTime.difference(now).inSeconds;
+
+      print('   ⏱️  현재 시간과 차이: ${difference}초');
+      print('   📱 앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
+
+      // 🔥 1초 이내 + 포그라운드일 때 즉시 화면 이동
+      if (difference <= 1 && _isAppInForeground) {
+        print('   ⚡ 즉시 알림 처리 (포그라운드)');
+        
+        // 즉시 화면 이동 (비동기로 실행)
+        Future.microtask(() async {
+          await _navigateToNotificationScreen(reminder.id!);
+        });
+        
+        print('   ✅ 즉시 화면 이동 예약 완료');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
+
+      // 🔥 백그라운드 또는 미래 시간 → 알림 예약
       final tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
 
       final androidPlatformChannelSpecifics = AndroidNotificationDetails(
@@ -404,12 +432,17 @@ class NotificationHelper {
         priority: Priority.high,
         showWhen: false,
         vibrationPattern: Int64List.fromList(_vibrationPattern),
+        playSound: false, // 🔥 사운드는 앱에서 직접 재생
+        enableVibration: true,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
       );
 
       final iOSPlatformChannelSpecifics = DarwinNotificationDetails(
         presentAlert: true,
-        sound: 'sounds/alarm03.mp3',
-        badgeNumber: 1,
+        presentBadge: true,
+        presentSound: false, // 🔥 사운드는 앱에서 직접 재생
       );
 
       final platformChannelSpecifics = NotificationDetails(
@@ -429,9 +462,11 @@ class NotificationHelper {
         payload: reminder.id.toString(),
       );
 
-      print('   ✅ ${reminder.title} - $tzScheduledTime 에 예약');
+      print('   ✅ 알림 예약 완료: $tzScheduledTime');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('   ❌ 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
 
@@ -654,44 +689,23 @@ class NotificationHelper {
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       print('⏰ 10초 후 알림 예약: $reminderId');
 
-      final now = tz.TZDateTime.now(tz.local);
-      final scheduledDate = now.add(Duration(seconds: 10));
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
 
-      print('   예약 시간: $scheduledDate');
+      // 🔥 10초 후 시간 계산
+      final scheduledTime = DateTime.now().add(Duration(seconds: 10));
+      
+      print('   📍 예약 시간: $scheduledTime');
+      print('   📱 앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
+      
+      // 🔥 _scheduleNotificationAt 사용 (포그라운드 처리 포함)
+      await _scheduleNotificationAt(reminder, scheduledTime);
 
-      await _notifications.zonedSchedule(
-        reminderId,
-        '약 먹을 시간이에요!',
-        '10초 테스트 알림입니다',
-        scheduledDate,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medication_channel',
-            'Medication Reminders',
-            channelDescription: 'Notifications for medication reminders',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            // 🔥 sound 제거 (기본 알림음 사용)
-            enableVibration: true,
-            fullScreenIntent: true,
-            category: AndroidNotificationCategory.alarm,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            // 🔥 sound 제거 (기본 알림음 사용)
-            interruptionLevel: InterruptionLevel.timeSensitive,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: reminderId.toString(),
-      );
-
-      print('✅ 10초 후 알림 예약 완료!');
+      print('   ✅ 10초 후 알림 예약 완료!');
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('❌ 10초 후 알림 예약 실패: $e');
@@ -706,54 +720,10 @@ class NotificationHelper {
       print('📅 알림 예약: ${reminder.title}');
 
       final scheduledTime = reminder.getNextScheduledTimeAfter(DateTime.now());
-      final tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
+      print('   ⏰ 예약 시간: $scheduledTime');
 
-      print('   ⏰ 예약 시간: $tzScheduledTime');
-
-      // 🔥 Android 설정 (카카오톡 스타일 진동)
-      final androidDetails = AndroidNotificationDetails(
-        'medication_channel',
-        '복약 알림',
-        channelDescription: '약 복용 시간을 알려드립니다',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: false,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList(_vibrationPattern), // 🔥 카카오톡 스타일
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-        visibility: NotificationVisibility.public,
-        styleInformation: BigTextStyleInformation(
-          '${reminder.title}\n지금 약을 복용하세요!',
-          contentTitle: '💊 약 먹을 시간',
-          summaryText: '복약 알림',
-        ),
-      );
-
-      // 🔥 iOS 설정
-      const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: false,
-        interruptionLevel: InterruptionLevel.timeSensitive,
-      );
-
-      final details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await _notifications.zonedSchedule(
-        reminder.id!,
-        '💊 약 먹을 시간',
-        '${reminder.title} - 지금 복용하세요!',
-        tzScheduledTime,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: reminder.id.toString(),
-      );
+      // 🔥 내부 메서드 호출
+      await _scheduleNotificationAt(reminder, scheduledTime);
 
       print('   ✅ 알림 예약 완료');
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -776,12 +746,16 @@ class NotificationHelper {
         return;
       }
 
-      // 1초 후 알림 (즉시)
+      // 🔥 즉시 실행 (1초 후)
       final immediateTime = DateTime.now().add(Duration(seconds: 1));
+      
+      print('   📍 예약 시간: $immediateTime');
+      print('   📱 앱 상태: ${_isAppInForeground ? "포그라운드" : "백그라운드"}');
+      
+      // 🔥 _scheduleNotificationAt 사용 (포그라운드 처리 포함)
       await _scheduleNotificationAt(reminder, immediateTime);
 
       print('   ✅ 즉시 알림 예약 완료!');
-      print('   📍 예약 시간: $immediateTime');
       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (e) {
       print('❌ 즉시 알림 예약 실패: $e');
@@ -824,37 +798,29 @@ class NotificationHelper {
     String title,
     int delaySeconds,
   ) async {
-    final scheduledDate = DateTime.now().add(Duration(seconds: delaySeconds));
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🧪 테스트 알림 예약: $reminderId');
 
-    await _notifications.zonedSchedule(
-      reminderId + 10000, // 테스트 알림용 고유 ID
-      '테스트 알림',
-      '$title - $delaySeconds초 후 알림',
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'test_channel',
-          'Test Notifications',
-          channelDescription: 'Test notification channel',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-          sound: RawResourceAndroidNotificationSound('alarm03'), // 🔥 수정
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          sound: 'alarm03.mp3', // 🔥 수정
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: reminderId.toString(),
-    );
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
 
-    print('✅ 테스트 알림 예약: ${scheduledDate.toString()}');
+      final scheduledDate = DateTime.now().add(Duration(seconds: delaySeconds));
+      print('   📍 예약 시간: $scheduledDate');
+
+      // 🔥 내부 메서드 사용
+      await _scheduleNotificationAt(reminder, scheduledDate);
+
+      print('   ✅ 테스트 알림 예약 완료');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 테스트 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 
   /// 리마인더 알림 (2시간 후)
@@ -863,36 +829,28 @@ class NotificationHelper {
     String title,
     int delayMinutes,
   ) async {
-    final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
+    try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('⏰ 리마인더 알림 예약: $reminderId');
 
-    await _notifications.zonedSchedule(
-      reminderId + 20000, // 리마인더용 고유 ID
-      '약 복용 확인',
-      '$title - 복용하셨나요?',
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminder_channel',
-          'Reminder Notifications',
-          channelDescription: 'Reminder notification channel',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-          sound: RawResourceAndroidNotificationSound('alarm03'), // 🔥 수정
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          sound: 'alarm03.mp3', // 🔥 수정
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: reminderId.toString(),
-    );
+      final reminder = await DatabaseHelper.getReminderById(reminderId);
+      if (reminder == null) {
+        print('❌ Reminder를 찾을 수 없습니다');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      }
 
-    print('✅ 리마인더 알림 예약: ${scheduledDate.toString()}');
+      final scheduledDate = DateTime.now().add(Duration(minutes: delayMinutes));
+      print('   📍 예약 시간: $scheduledDate');
+
+      // 🔥 내부 메서드 사용
+      await _scheduleNotificationAt(reminder, scheduledDate);
+
+      print('   ✅ 리마인더 알림 예약 완료');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (e) {
+      print('❌ 리마인더 알림 예약 실패: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 }

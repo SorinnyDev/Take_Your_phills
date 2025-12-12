@@ -170,9 +170,10 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
 
   String _getTimeDifference(DateTime scheduledTime) {
     final now = DateTime.now();
-    final diff = scheduledTime.difference(now);
+    final diff = now.difference(scheduledTime); // 🔥 순서 변경: 현재 - 스케줄
 
     if (diff.isNegative) {
+      // 🔥 현재 시간이 스케줄보다 이전 = 일찍 복용
       final absDiff = diff.abs();
       if (absDiff.inHours > 0) {
         return '${absDiff.inHours}시간 ${absDiff.inMinutes % 60}분 일찍 복용';
@@ -180,6 +181,7 @@ class _ManualRecordScreenState extends State<ManualRecordScreen> {
         return '${absDiff.inMinutes}분 일찍 복용';
       }
     } else {
+      // 🔥 현재 시간이 스케줄보다 이후 = 늦게 복용
       if (diff.inHours > 0) {
         return '${diff.inHours}시간 ${diff.inMinutes % 60}분 늦게 복용';
       } else {
